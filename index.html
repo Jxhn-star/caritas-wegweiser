@@ -515,19 +515,20 @@
       </div>
       <div class="form-group translator-text-group">
         <label for="sourceText">Erkannter Text <span>– bitte vor dem Übersetzen prüfen</span></label>
-        <textarea id="sourceText" rows="6" maxlength="5000" placeholder="Hier kannst du auch Text direkt einfügen …"></textarea>
+        <textarea id="sourceText" class="notranslate" translate="no" rows="6" maxlength="5000" placeholder="Hier kannst du auch Text direkt einfügen …"></textarea>
         <small id="characterCount">0 / 5.000 Zeichen</small>
       </div>
+      <label class="demo-note notranslate" translate="no" style="display:block;margin:12px 0"><input type="checkbox" id="translationConsent" /> Ich stimme zu, dass der eingegebene oder erkannte Text zur Übersetzung an MyMemory (Translated) gesendet wird. Bitte persönliche Angaben vorher entfernen. <a href="https://mymemory.translated.net/doc/en/privacy.php" target="_blank" rel="noopener noreferrer">Datenschutz</a></label>
       <button class="btn btn-primary btn-large full" id="translateText" type="button">Text übersetzen <span>→</span></button>
       <div class="scan-status hidden" id="scanStatus" role="status" aria-live="polite"><span class="loader"></span><strong id="scanStatusTitle">Dokument wird gelesen …</strong><small id="scanStatusDetail">Texterkennung wird vorbereitet</small><progress id="scanProgress" max="100" value="0"></progress></div>
       <div class="translator-error hidden" id="translatorError" role="alert"></div>
       <div class="scan-result hidden" id="scanResult">
         <div class="result-head"><span>✦</span><strong>Übersetzung</strong><small id="resultLanguage">ENGLISH</small></div>
-        <div class="translated-text" id="translatedText" dir="auto"></div>
+        <div class="translated-text notranslate" id="translatedText" translate="no" dir="auto"></div>
         <div class="translation-actions"><button class="btn btn-secondary" id="copyTranslation" type="button">Übersetzung kopieren</button><button class="btn btn-secondary" id="readTranslation" type="button">Vorlesen</button><button class="text-button" id="downloadTranslation" type="button">Als Textdatei laden ↓</button></div>
         <p class="translation-warning"><strong>Wichtig:</strong> Automatische Übersetzungen können Fehler enthalten. Prüfe Fristen, Namen und Beträge sorgfältig oder frage eine Beratungsstelle.</p>
       </div>
-      <p class="demo-note privacy-detail">Bilder und PDFs werden für die Texterkennung nur in deinem Browser verarbeitet. Der erkannte Text wird zur Übersetzung vorübergehend an den Übersetzungsdienst MyMemory übertragen und von dieser Website nicht gespeichert.</p>
+      <p class="demo-note privacy-detail">Bilder und PDFs werden für die Texterkennung nur in deinem Browser verarbeitet. Der erkannte Text wird zur Übersetzung nach deiner Zustimmung an den externen Übersetzungsdienst MyMemory übertragen und von dieser Website nicht gespeichert.</p>
     </div>
   </div>
 
@@ -550,6 +551,6 @@
   </script>
   <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=calendar-recommendation-3"></script>
+  <script src="app.js?v=translator-fix-4"></script>
 </body>
 </html>
