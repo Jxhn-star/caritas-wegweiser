@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#c8102e" />
+  <meta name="description" content="Caritas Wegweiser – digitale Beratung, Termine und Übersetzungshilfe an einem Ort." />
+  <title>Caritas Wegweiser</title>
+  <script>
+    (() => {
+      const resetVersion = 'german-default-2026-09-17';
+      try {
+        if (localStorage.getItem('caritasLanguageResetVersion') === resetVersion) return;
+        localStorage.setItem('caritasSiteLanguage', 'de');
+        localStorage.setItem('caritasLanguageResetVersion', resetVersion);
+        sessionStorage.removeItem('caritasTranslationBootstrapped');
+        document.cookie = 'googtrans=;path=/;max-age=0;SameSite=Lax';
+        document.cookie = `googtrans=;path=/;domain=${location.hostname};max-age=0;SameSite=Lax`;
+        document.cookie = 'googtrans=/de/de;path=/;SameSite=Lax';
+        document.cookie = `googtrans=/de/de;path=/;domain=${location.hostname};SameSite=Lax`;
+      } catch { /* Deutsch bleibt durch das HTML als sichere Standardsprache aktiv. */ }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css?v=limburg-location-1" />
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <div class="sr-only" id="routeAnnouncer" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#/start" aria-label="Caritas Wegweiser Startseite">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48"><path d="M24 5v38M5 24h38M11 11l26 26M37 11 11 37" /></svg>
+      </span>
+      <span><strong>caritas</strong><small>wegweiser</small></span>
+    </a>
+
+    <nav class="desktop-nav" aria-label="Hauptnavigation">
+      <a href="#/standorte" data-nav-page="standorte">Standorte</a>
+      <a href="#/dokumente" data-nav-page="dokumente">Dokumente</a>
+      <a href="#/hilfe" data-nav-page="hilfe">Hilfen</a>
+      <a href="#/tipps" data-nav-page="tipps">Tipps</a>
+      <a href="#/kontakt" data-nav-page="kontakt">Kontakt</a>
+      <a class="urgent-nav" href="#/soforthilfe" data-nav-page="soforthilfe">Soforthilfe</a>
+    </nav>
+
+    <div class="header-actions">
+      <label class="language-select notranslate" translate="no">
+        <span class="sr-only">Sprache</span>
+        <select id="languageSelect" aria-label="Sprache auswählen">
+          <option value="de" selected>DE</option>
+          <option value="en">EN</option>
+          <option value="ar">AR</option>
+          <option value="tr">TR</option>
+          <option value="uk">UK</option>
+        </select>
+      </label>
+      <button class="btn btn-primary btn-small" data-open-booking>
+        Termin buchen
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+      </button>
+      <button class="menu-button" id="menuButton" aria-label="Menü öffnen" aria-expanded="false">
+        <span></span><span></span>
+      </button>
+      <button class="accessibility-button notranslate" id="accessibilityButton" type="button" aria-label="Barrierefreiheit öffnen" title="Barrierefreiheit" aria-expanded="false" aria-controls="accessibilityPanel" translate="no">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4.5" r="2.2"/><path d="M5 8.5h14M12 7v5m0 0-4 8m4-8 4 8"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="google_translate_element" class="translation-engine notranslate" aria-hidden="true" translate="no"></div>
+
+  <div class="mobile-menu" id="mobileMenu" aria-hidden="true" inert>
+    <a href="#/standorte" data-nav-page="standorte">Standorte</a>
+    <a href="#/dokumente" data-nav-page="dokumente">Dokumente übersetzen</a>
+    <a href="#/hilfe" data-nav-page="hilfe">Praktische Hilfen</a>
+    <a href="#/tipps" data-nav-page="tipps">Tipps</a>
+    <a href="#/kontakt" data-nav-page="kontakt">Kontakt</a>
+    <a href="#/soforthilfe" data-nav-page="soforthilfe">Soforthilfe</a>
+  </div>
+
+  <aside class="accessibility-panel" id="accessibilityPanel" aria-labelledby="accessibilityTitle" hidden>
+    <div class="accessibility-panel-head">
+      <div><span class="kicker">Anzeige anpassen</span><h2 id="accessibilityTitle">Barrierefreiheit</h2></div>
+      <button class="panel-close" id="closeAccessibility" type="button" aria-label="Einstellungen schließen">×</button>
+    </div>
+    <p>Die Einstellungen bleiben auf diesem Gerät gespeichert.</p>
+    <div class="accessibility-options">
+      <button class="accessibility-toggle" id="largeTextToggle" type="button" aria-pressed="false"><span aria-hidden="true">A+</span><strong>Große Schrift</strong><small>Texte und Bedienelemente vergrößern</small></button>
+      <button class="accessibility-toggle" id="highContrastToggle" type="button" aria-pressed="false"><span aria-hidden="true">◐</span><strong>Hoher Kontrast</strong><small>Farben und Umrandungen verstärken</small></button>
+      <button class="accessibility-toggle" id="reduceMotionToggle" type="button" aria-pressed="false"><span aria-hidden="true">◫</span><strong>Weniger Bewegung</strong><small>Animationen und weiches Scrollen ausschalten</small></button>
+      <button class="accessibility-toggle" id="simpleViewToggle" type="button" aria-pressed="false"><span aria-hidden="true">☰</span><strong>Einfache Ansicht</strong><small>Dekorative Elemente ausblenden</small></button>
+    </div>
+    <section class="speech-reader" aria-labelledby="speechReaderTitle">
+      <div class="speech-reader-head">
+        <span aria-hidden="true">🔊</span>
+        <div><span class="speech-reader-kicker">Sprachbarriere</span><strong id="speechReaderTitle">Text vorlesen</strong><small>Die aktuelle Seite wird in der ausgewählten Sprache vorgelesen.</small></div>
+      </div>
+      <div class="speech-reader-actions">
+        <button class="btn btn-primary" id="readPageButton" type="button">Seite vorlesen</button>
+        <button class="btn btn-secondary" id="pausePageReading" type="button" disabled>Pause</button>
+        <button class="btn btn-secondary" id="stopPageReading" type="button" disabled>Stopp</button>
+      </div>
+      <p class="speech-reader-status" id="speechReaderStatus" role="status" aria-live="polite">Bereit zum Vorlesen.</p>
+    </section>
+    <button class="btn btn-secondary full" id="resetAccessibility" type="button">Einstellungen zurücksetzen</button>
+    <div class="sr-only" id="accessibilityStatus" role="status" aria-live="polite"></div>
+  </aside>
+
+  <main id="main">
+    <section class="hero route-page" id="start" data-page="start">
+      <div class="hero-copy reveal">
+        <div class="eyebrow"><span></span> Hilfe, die bei dir ankommt</div>
+        <h1>Du musst nicht alles <em>alleine</em> schaffen.</h1>
+        <p>Finde die passende Beratung, übersetze wichtige Dokumente und erhalte Antworten – einfach, sicher und in deiner Sprache.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-large" data-open-booking>
+            Kostenlosen Termin finden
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+          </button>
+          <button class="text-button" data-open-ai>
+            <span class="spark-icon">✦</span> Orientierung starten
+          </button>
+        </div>
+        <div class="trust-row">
+          <span><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-8" /></svg>Kostenlos</span>
+          <span><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6l-7-3Z" /></svg>Vertraulich</span>
+          <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></svg>Mehrsprachig</span>
+        </div>
+      </div>
+
+      <div class="hero-visual reveal delay-1" role="region" aria-label="Vorschau der digitalen Beratung">
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
+        <div class="phone-card">
+          <div class="phone-top"><span>9:41</span><span class="phone-pill"></span><span>●●●</span></div>
+          <div class="phone-brand"><span class="mini-mark">✣</span><strong>wegweiser</strong><span class="avatar">AM</span></div>
+          <p class="phone-greeting">Guten Morgen, Amira</p>
+          <h3>Wie können wir dir helfen?</h3>
+          <button class="phone-search" data-open-ai><span>✦</span><span>Beschreibe dein Anliegen …</span><kbd>↵</kbd></button>
+          <div class="phone-options">
+            <a href="#/standorte"><span class="option-icon coral">€</span><span>Arbeit &<br />Finanzen</span></a>
+            <a href="#/standorte"><span class="option-icon blue">⌁</span><span>Familie &<br />Kinder</span></a>
+            <button data-open-scanner><span class="option-icon yellow">▣</span><span>Dokument<br />übersetzen</span></button>
+            <a href="#/standorte"><span class="option-icon green">⌂</span><span>Wohnen &<br />Notfall</span></a>
+          </div>
+          <div class="next-appointment">
+            <div class="date-tile"><strong>18</strong><small>SEP</small></div>
+            <div><small>Nächster Termin</small><strong>Sozialberatung</strong><span>10:30 · Video</span></div>
+            <span class="more">•••</span>
+          </div>
+        </div>
+        <div class="floating-card floating-human"><span class="status-dot"></span><div><strong>Echte Menschen</strong><small>Persönlich für dich da</small></div></div>
+        <div class="floating-card floating-ai"><span>✦</span><div><strong>Digitaler Assistent</strong><small>Hilft bei der Orientierung</small></div></div>
+      </div>
+    </section>
+
+    <section class="quick-help route-page" data-page="start" aria-label="Schnellzugriff">
+      <a href="#/standorte"><span class="quick-number">01</span><span class="quick-icon">⌖</span><span><strong>Standort finden</strong><small>Caritas in deiner Nähe</small></span><b>↗</b></a>
+      <button data-open-scanner><span class="quick-number">02</span><span class="quick-icon">⌗</span><span><strong>Dokument verstehen</strong><small>Foto machen & übersetzen</small></span><b>↗</b></button>
+      <button data-open-ai><span class="quick-number">03</span><span class="quick-icon">✦</span><span><strong>Frage stellen</strong><small>Automatische Orientierung</small></span><b>↗</b></button>
+    </section>
+
+    <section class="section locations-section route-page" id="standorte" data-page="standorte">
+      <div class="locations-heading reveal">
+        <div>
+          <span class="kicker">Caritas vor Ort</span>
+          <h2>Finde einen Standort in Deutschland.</h2>
+        </div>
+        <p>Limburg ist als Standardstandort vorausgewählt. Über „Zurücksetzen“ kannst du weitere regionale Caritasverbände und Geschäftsstellen anzeigen.</p>
+      </div>
+
+      <div class="location-search reveal delay-1" role="search">
+        <label for="locationSearch">Ort, Postleitzahl oder Straße</label>
+        <div>
+          <span aria-hidden="true">⌕</span>
+          <input id="locationSearch" type="search" autocomplete="postal-code" value="Limburg" placeholder="Zum Beispiel: Köln oder 50825" />
+          <button class="text-button" id="resetLocationSearch" type="button" hidden>Zurücksetzen</button>
+        </div>
+      </div>
+
+      <div class="locations-layout reveal delay-2">
+        <div class="map-card">
+          <div id="caritasMap" class="caritas-map" role="application" aria-label="Interaktive Karte mit Caritas-Standorten in Deutschland" aria-describedby="mapDescription">
+            <div class="map-fallback"><span aria-hidden="true">⌖</span><strong>Karte wird geladen …</strong></div>
+          </div>
+          <p id="mapDescription">Mit den Plus- und Minus-Schaltflächen kannst du die Karte vergrößern oder verkleinern. Wähle einen Marker oder einen Standort aus der Liste.</p>
+        </div>
+
+        <aside class="locations-list-panel" aria-labelledby="locationResultsTitle">
+          <div class="locations-list-head">
+            <div><span class="kicker">Auswahl</span><h3 id="locationResultsTitle">Standorte</h3></div>
+            <span id="locationCount" aria-live="polite">1 Standort</span>
+          </div>
+          <div class="location-list" id="locationList"></div>
+          <div class="location-empty" id="locationEmpty" hidden>
+            <strong>Kein Standort in dieser Auswahl</strong>
+            <p>Nutze die vollständige Caritas-Suche für weitere Orte.</p>
+          </div>
+        </aside>
+      </div>
+
+      <div class="official-location-search reveal">
+        <div><strong>Du suchst eine bestimmte Beratungsstelle?</strong><span>In der offiziellen Caritas-Adresssuche findest du weitere Dienste und Einrichtungen in ganz Deutschland. Stand der Auswahl: September 2026.</span></div>
+        <a class="btn btn-primary" href="https://www.caritas.de/adressen" target="_blank" rel="noopener">Alle Caritas-Adressen <span>↗</span></a>
+      </div>
+    </section>
+
+    <section class="section scanner-section route-page" id="dokumente" data-page="dokumente">
+      <div class="scanner-copy reveal">
+        <span class="kicker light">Dokument-Hilfe</span>
+        <h2>Ein Foto.<br />Klare Worte.</h2>
+        <p>Fotografiere einen Brief oder Bescheid. Die Texterkennung liest den Inhalt und übersetzt ihn in die ausgewählte Sprache. Wichtige Angaben solltest du anschließend mit einer Beratungsstelle prüfen.</p>
+        <ol class="steps">
+          <li><span>1</span><div><strong>Dokument fotografieren</strong><small>Gut lesbar, ohne persönliche Daten zu verdecken</small></div></li>
+          <li><span>2</span><div><strong>Sprache auswählen</strong><small>Übersetzung in 11 Sprachen</small></div></li>
+          <li><span>3</span><div><strong>Übersetzung prüfen</strong><small>Namen, Beträge und Fristen sorgfältig vergleichen</small></div></li>
+        </ol>
+        <button class="btn btn-white btn-large" data-open-scanner>Dokument jetzt scannen <span>↗</span></button>
+        <small class="privacy-note"><svg viewBox="0 0 24 24"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z" /></svg>Deine Aufnahme wird nach der Analyse gelöscht.</small>
+      </div>
+      <div class="scanner-visual reveal delay-1">
+        <div class="scan-phone">
+          <div class="camera-view">
+            <div class="document-sheet">
+              <div class="doc-logo">Amt für Soziales</div>
+              <span class="doc-line w90"></span><span class="doc-line w75"></span><span class="doc-line w85"></span>
+              <div class="doc-box"></div>
+              <span class="doc-line w70"></span><span class="doc-line w90"></span><span class="doc-line w60"></span>
+            </div>
+            <span class="corner c1"></span><span class="corner c2"></span><span class="corner c3"></span><span class="corner c4"></span>
+            <span class="scan-line"></span>
+            <div class="detected"><span>✓</span> Dokument erkannt</div>
+          </div>
+          <div class="camera-controls"><span>⌁</span><button data-open-scanner aria-label="Foto aufnehmen"></button><span>▧</span></div>
+        </div>
+        <div class="translation-card">
+          <div class="translation-top"><span>✦</span><strong>Übersetzt</strong><small>DOKUMENT-HILFE</small></div>
+          <p>Das Amt benötigt noch einen Nachweis über dein Einkommen.</p>
+          <div><span>Wichtig</span><strong>Antwort bis 24. September</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section knowledge-section route-page" id="tipps" data-page="tipps">
+      <div class="section-heading reveal">
+        <div><span class="kicker">Einfach nachlesen</span><h2>Gut lesbare Tipps für deinen Alltag.</h2></div>
+        <p>Kurze und verständliche Tipps zeigen dir, was du jetzt tun kannst und welche Unterlagen bei einer Beratung helfen.</p>
+      </div>
+      <div class="reading-grid" id="contentGrid">
+        <article class="reading-card reading-card-finances reveal">
+          <a class="reading-card-link" href="#/tipps/finanzen" data-guide-link="finanzen" aria-label="Tipp zu Finanzen lesen">
+            <div class="reading-card-top"><span class="reading-icon" aria-hidden="true">€</span><span class="reading-time">3 Min. Lesezeit</span></div>
+            <span class="reading-topic">Finanzen</span>
+            <h3>Bescheide und Geldsorgen: Erste Schritte</h3>
+            <p>So behältst du Fristen, Zahlungen und wichtige Unterlagen im Blick.</p>
+            <ul><li>Fristen sofort notieren</li><li>Unterlagen vollständig sammeln</li><li>Nichts ungeprüft unterschreiben</li></ul>
+            <span class="reading-link">Tipp öffnen <span aria-hidden="true">→</span></span>
+          </a>
+        </article>
+        <article class="reading-card reading-card-family reveal delay-1">
+          <a class="reading-card-link" href="#/tipps/familie" data-guide-link="familie" aria-label="Tipp zu Familie und Kindern lesen">
+            <div class="reading-card-top"><span class="reading-icon" aria-hidden="true">⌁</span><span class="reading-time">4 Min. Lesezeit</span></div>
+            <span class="reading-topic">Familie & Kinder</span>
+            <h3>Unterstützung für Familien finden</h3>
+            <p>Eine einfache Vorbereitung für Gespräche über Alltag, Betreuung und Belastungen.</p>
+            <ul><li>Das wichtigste Anliegen benennen</li><li>Fragen und Termine festhalten</li><li>Passende Beratung auswählen</li></ul>
+            <span class="reading-link">Tipp öffnen <span aria-hidden="true">→</span></span>
+          </a>
+        </article>
+        <article class="reading-card reading-card-housing reveal">
+          <a class="reading-card-link" href="#/tipps/wohnen" data-guide-link="wohnen" aria-label="Tipp zu Wohnen und Notfällen lesen">
+            <div class="reading-card-top"><span class="reading-icon" aria-hidden="true">⌂</span><span class="reading-time">4 Min. Lesezeit</span></div>
+            <span class="reading-topic">Wohnen & Notfall</span>
+            <h3>Probleme mit Miete oder Wohnung</h3>
+            <p>Diese Schritte helfen bei Schäden, Zahlungsproblemen oder drohendem Wohnungsverlust.</p>
+            <ul><li>Schreiben und Fotos sichern</li><li>Absprachen schriftlich festhalten</li><li>Bei Kündigung schnell handeln</li></ul>
+            <span class="reading-link">Tipp öffnen <span aria-hidden="true">→</span></span>
+          </a>
+        </article>
+        <article class="reading-card reading-card-migration reveal delay-1">
+          <a class="reading-card-link" href="#/tipps/migration" data-guide-link="migration" aria-label="Tipp zu Migration und Integration lesen">
+            <div class="reading-card-top"><span class="reading-icon" aria-hidden="true">◎</span><span class="reading-time">4 Min. Lesezeit</span></div>
+            <span class="reading-topic">Migration & Integration</span>
+            <h3>Ankommen und Orientierung finden</h3>
+            <p>Wichtige erste Schritte zu Sprache, Aufenthalt, Dokumenten und Beratungsangeboten.</p>
+            <ul><li>Dokumente geordnet mitnehmen</li><li>Sprachbedarf vorher angeben</li><li>Fristen gemeinsam prüfen</li></ul>
+            <span class="reading-link">Tipp öffnen <span aria-hidden="true">→</span></span>
+          </a>
+        </article>
+        <article class="reading-card reading-card-health reveal delay-2">
+          <a class="reading-card-link" href="#/tipps/gesundheit" data-guide-link="gesundheit" aria-label="Tipp zu Gesundheit und Pflege lesen">
+            <div class="reading-card-top"><span class="reading-icon" aria-hidden="true">＋</span><span class="reading-time">4 Min. Lesezeit</span></div>
+            <span class="reading-topic">Gesundheit & Pflege</span>
+            <h3>Gespräche und Pflege gut vorbereiten</h3>
+            <p>So sammelst du wichtige Informationen und findest passende Unterstützung.</p>
+            <ul><li>Medikamente und Befunde notieren</li><li>Fragen vor dem Gespräch sammeln</li><li>Pflegebedarf ehrlich beschreiben</li></ul>
+            <span class="reading-link">Tipp öffnen <span aria-hidden="true">→</span></span>
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section class="section guide-page route-page" id="tipp" data-page="tipp">
+      <nav class="guide-breadcrumb" aria-label="Brotkrümelnavigation">
+        <a href="#/tipps">Tipps</a><span aria-hidden="true">/</span><span id="guideBreadcrumb" aria-current="page">Thema</span>
+      </nav>
+      <div class="guide-page-layout">
+        <article class="guide-article reveal">
+          <div class="guide-page-head">
+            <span class="guide-page-icon" id="guidePageIcon" aria-hidden="true">•</span>
+            <span class="reading-topic" id="guidePageCategory">Lesetipp</span>
+          </div>
+          <h1 id="guidePageTitle">Tipp</h1>
+          <p class="guide-lead" id="guidePageIntro"></p>
+          <div class="guide-page-steps">
+            <h2>Das kannst du jetzt tun</h2>
+            <ol id="guidePageSteps"></ol>
+          </div>
+          <div class="guide-notice"><strong>Gut zu wissen</strong><p>Dieser Tipp gibt eine erste Orientierung. Bei wichtigen Fristen, rechtlichen Fragen oder gesundheitlichen Beschwerden solltest du fachkundige Hilfe nutzen.</p></div>
+        </article>
+        <aside class="guide-next reveal delay-1" aria-labelledby="guideNextTitle">
+          <span class="kicker">Nächster Schritt</span>
+          <h2 id="guideNextTitle">Du musst das nicht allein klären.</h2>
+          <p>Eine Beratungsstelle kann deine Situation und Unterlagen persönlich mit dir ansehen.</p>
+          <a class="btn btn-primary full" href="#/kontakt">Kontaktmöglichkeiten ansehen</a>
+          <button class="btn btn-secondary full" type="button" data-open-scanner>Brief oder Dokument prüfen</button>
+          <a class="back-to-guides" href="#/tipps">← Zu allen Tipps</a>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section tools-section route-page" id="hilfe" data-page="hilfe">
+      <div class="page-intro reveal">
+        <span class="kicker">Praktische Hilfen</span>
+        <h1>Den nächsten Schritt einfacher machen.</h1>
+        <p>Drei Werkzeuge helfen dir bei der Orientierung, bei wichtigen Fristen und bei der Vorbereitung auf eine Beratung.</p>
+      </div>
+
+      <div class="tool-grid">
+        <article class="helper-card reveal">
+          <span class="tool-icon">✦</span>
+          <h2>Hilfe-Finder</h2>
+          <p>Beantworte zwei kurze Fragen. Du erhältst eine passende erste Empfehlung.</p>
+          <form id="helpFinderForm">
+            <div class="form-group"><label for="helpTopic">Worum geht es?</label><select id="helpTopic"><option value="Arbeit & Finanzen">Geld, Schulden oder Arbeit</option><option value="Wohnen">Wohnung oder Mietprobleme</option><option value="Familie & Kinder">Familie, Schwangerschaft oder Kinder</option><option value="Migration & Integration">Aufenthalt, Sprache oder Ankommen</option><option value="Gesundheit & Pflege">Gesundheit, Pflege oder seelische Belastung</option><option value="Allgemeine Sozialberatung">Ich bin nicht sicher</option></select></div>
+            <div class="form-group"><label for="helpUrgency">Wie dringend ist es?</label><select id="helpUrgency"><option value="normal">Ich brauche Orientierung</option><option value="soon">Es gibt eine Frist oder ein dringendes Problem</option><option value="acute">Ich bin gerade in Gefahr oder einer akuten Krise</option></select></div>
+            <button class="btn btn-primary full" type="submit">Empfehlung anzeigen <span>→</span></button>
+          </form>
+          <div class="tool-result" id="helpFinderResult" role="status" hidden></div>
+        </article>
+
+        <article class="helper-card reveal delay-1">
+          <span class="tool-icon mint">◷</span>
+          <h2>Fristen-Erinnerung</h2>
+          <p>Trage die Frist aus deinem Brief ein und speichere eine Erinnerung im Kalender.</p>
+          <form id="deadlineForm">
+            <div class="form-group"><label for="deadlineTitle">Aufgabe</label><input id="deadlineTitle" maxlength="80" required placeholder="z. B. Unterlagen beim Amt einreichen" /></div>
+            <div class="form-group"><label for="deadlineDate">Frist</label><input id="deadlineDate" type="date" required /></div>
+            <button class="btn btn-primary full" type="submit">Frist prüfen</button>
+          </form>
+          <div class="tool-result" id="deadlineResult" role="status" hidden></div>
+          <button class="btn btn-secondary full" id="downloadDeadline" type="button" hidden>In Kalender speichern</button>
+        </article>
+
+        <article class="helper-card reveal delay-2">
+          <span class="tool-icon lilac">✓</span>
+          <h2>Dokumenten-Checkliste</h2>
+          <p>Wähle dein Thema. Erledigte Punkte bleiben nur auf deinem Gerät gespeichert.</p>
+          <div class="form-group"><label for="checklistTopic">Thema</label><select id="checklistTopic"><option value="general">Allgemeine Beratung</option><option value="finance">Arbeit & Finanzen</option><option value="housing">Wohnen</option><option value="family">Familie & Kinder</option><option value="migration">Migration & Integration</option><option value="care">Gesundheit & Pflege</option></select></div>
+          <div class="personal-checklist" id="personalChecklist"></div>
+          <div class="checklist-actions"><button class="text-button" id="printChecklist" type="button">Checkliste drucken</button><button class="text-button" id="resetChecklist" type="button">Zurücksetzen</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section emergency-section route-page" id="soforthilfe" data-page="soforthilfe">
+      <div class="page-intro reveal">
+        <span class="kicker light">Soforthilfe in Deutschland</span>
+        <h1>Du brauchst jetzt Hilfe?</h1>
+        <p>Bei unmittelbarer Gefahr oder einem medizinischen Notfall rufe sofort die passende Notrufnummer an. Diese Seite ersetzt keine professionelle Notfallhilfe.</p>
+      </div>
+      <div class="emergency-grid">
+        <a class="emergency-card critical reveal" href="tel:112"><span>Medizinischer Notfall · Feuerwehr</span><strong>112</strong><small>Rund um die Uhr · kostenlos</small></a>
+        <a class="emergency-card reveal delay-1" href="tel:110"><span>Polizei · akute Gefahr</span><strong>110</strong><small>Rund um die Uhr · kostenlos</small></a>
+        <a class="emergency-card reveal delay-2" href="tel:116123"><span>Telefonseelsorge</span><strong>116 123</strong><small>Rund um die Uhr · anonym und kostenlos</small></a>
+        <a class="emergency-card reveal" href="tel:116117"><span>Ärztlicher Bereitschaftsdienst</span><strong>116 117</strong><small>Dringend, aber nicht lebensbedrohlich</small></a>
+        <a class="emergency-card reveal delay-1" href="tel:116016"><span>Hilfetelefon Gewalt gegen Frauen</span><strong>116 016</strong><small>Rund um die Uhr · anonym und kostenlos</small></a>
+      </div>
+      <div class="emergency-note reveal"><strong>Wenn Telefonieren nicht sicher ist:</strong><span>Gehe, wenn möglich, zu einer Vertrauensperson oder an einen öffentlichen, sicheren Ort. Nutze in akuter Gefahr die offiziellen Notrufangebote.</span></div>
+    </section>
+
+    <section class="section contact-section route-page" id="kontakt" data-page="kontakt">
+      <div class="contact-card reveal">
+        <div class="contact-copy"><span class="kicker light">Wir sind für dich da</span><h2>Du weißt nicht, wo du anfangen sollst?</h2><p>Sprich direkt mit unserem Team. Gemeinsam finden wir den nächsten Schritt.</p></div>
+        <div class="contact-options">
+          <button data-open-ai><span class="contact-icon">✦</span><span><small>Digitale Orientierung</small><strong>Wegweiser-Assistent öffnen</strong><em>Hilft beim Finden des nächsten Schritts</em></span><b>↗</b></button>
+          <a href="#/tipps"><span class="contact-icon">≡</span><span><small>Einfach nachlesen</small><strong>Tipps und nächste Schritte</strong><em>Verständliche Informationen zu häufigen Anliegen</em></span><b>↗</b></a>
+          <a href="#/standorte"><span class="contact-icon">⌖</span><span><small>Vor Ort</small><strong>Caritas-Standorte finden</strong><em>Deutschlandweite Auswahl auf der Karte</em></span><b>↗</b></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-brand brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 5v38M5 24h38M11 11l26 26M37 11 11 37" /></svg></span><span><strong>caritas</strong><small>wegweiser</small></span></div>
+    <p>Ein digitaler Projektentwurf für Beratung, Orientierung und Teilhabe.</p>
+    <div class="footer-links"><a href="#/kontakt">Kontakt</a><a href="#/soforthilfe">Soforthilfe</a><a href="#/start">Startseite</a><span>Demo · 2026</span></div>
+  </footer>
+
+  <button class="ai-fab" data-open-ai aria-label="Wegweiser-Assistent öffnen"><span>✦</span><span>Frag den Wegweiser</span></button>
+
+  <div class="modal" id="bookingModal" role="dialog" aria-modal="true" aria-labelledby="bookingTitle" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-panel booking-panel">
+      <button class="modal-close" data-close-modal aria-label="Fenster schließen">×</button>
+      <div class="modal-kicker">Termin vereinbaren</div>
+      <div id="bookingFormView">
+        <h2 id="bookingTitle">Wann passt es für dich?</h2>
+        <p>Wähle dein Thema, die Art der Beratung und einen freien Termin.</p>
+        <div class="booking-progress" aria-hidden="true"><span class="active"></span><span class="active"></span><span class="active"></span></div>
+        <form id="bookingForm" novalidate>
+          <div class="form-group"><label for="bookingTopic">Beratungsthema</label><select id="bookingTopic" name="topic" required><option value="Allgemeine Sozialberatung">Allgemeine Sozialberatung</option><option value="Arbeit & Finanzen">Arbeit & Finanzen</option><option value="Familie & Kinder">Familie & Kinder</option><option value="Wohnen">Wohnen</option><option value="Migration & Integration">Migration & Integration</option><option value="Gesundheit & Pflege">Gesundheit & Pflege</option></select></div>
+          <div class="form-group"><span class="form-label">Beratungsart</span><div class="choice-row" role="group" aria-label="Beratungsart"><button type="button" class="choice active" data-mode="Video" aria-pressed="true">▣ Video</button><button type="button" class="choice" data-mode="Vor Ort" aria-pressed="false">⌖ Vor Ort</button><button type="button" class="choice" data-mode="Telefon" aria-pressed="false">☎ Telefon</button></div></div>
+          <div class="mode-info" id="modeInfo" role="status"></div>
+          <div class="form-group"><span class="form-label">Freier Termin</span><div class="slot-grid" role="group" aria-label="Termin auswählen"><button type="button" class="slot active" data-offset="2" data-time="10:30" aria-pressed="true"><small>Termin wird geladen</small><strong>10:30</strong></button><button type="button" class="slot" data-offset="3" data-time="14:00" aria-pressed="false"><small>Termin wird geladen</small><strong>14:00</strong></button><button type="button" class="slot" data-offset="4" data-time="09:15" aria-pressed="false"><small>Termin wird geladen</small><strong>09:15</strong></button></div></div>
+          <div class="form-grid">
+            <div class="form-group"><label for="bookingName">Vor- und Nachname</label><input id="bookingName" name="name" autocomplete="name" required minlength="2" placeholder="Erika Mustermann" /></div>
+            <div class="form-group"><label for="bookingEmail">E-Mail für die Bestätigung</label><input id="bookingEmail" name="email" type="email" autocomplete="email" required placeholder="name@beispiel.de" /></div>
+          </div>
+          <div class="form-group"><label for="bookingConversationLanguage">Gewünschte Gesprächssprache</label><select id="bookingConversationLanguage" name="preferredLanguage" required aria-describedby="bookingLanguageHint"><option value="Deutsch">Deutsch</option><option value="English">English</option><option value="العربية">العربية</option><option value="Türkçe">Türkçe</option><option value="Українська">Українська</option><option value="Andere Sprache">Andere Sprache</option></select><small class="field-hint" id="bookingLanguageHint">In welcher Sprache soll das Beratungsgespräch möglichst stattfinden?</small></div>
+          <div class="form-group" id="bookingOtherLanguageGroup" hidden><label for="bookingOtherLanguage">Welche Sprache?</label><input id="bookingOtherLanguage" name="otherLanguage" maxlength="80" autocomplete="language" placeholder="z. B. Français oder Polski" /></div>
+          <div class="form-group"><label for="bookingAccessibilityNeeds">Unterstützung für den Termin <span class="optional-label">(optional)</span></label><textarea id="bookingAccessibilityNeeds" name="accessibilityNeeds" maxlength="300" rows="3" placeholder="z. B. Deutsche Gebärdensprache, stufenloser Zugang, Begleitperson oder Leichte Sprache"></textarea><small class="field-hint">Bitte keine medizinischen Diagnosen eintragen – beschreibe nur, was dir beim Gespräch hilft.</small></div>
+          <div class="form-group" id="phoneGroup" hidden><label for="bookingPhone">Telefonnummer</label><input id="bookingPhone" name="phone" type="tel" autocomplete="tel" placeholder="z. B. 0151 12345678" /></div>
+          <div class="bot-field" aria-hidden="true"><label for="bookingWebsite">Website</label><input id="bookingWebsite" name="website" autocomplete="off" tabindex="-1" /></div>
+          <label class="consent-check"><input id="bookingConsent" type="checkbox" required /><span>Ich stimme zu, dass meine Angaben zur Bearbeitung dieser Terminanfrage verwendet werden. Hinweise zum Datenschutz habe ich gelesen.</span></label>
+          <div class="form-error" id="bookingError" role="alert" hidden></div>
+          <button class="btn btn-primary btn-large full" id="confirmBooking" type="submit">Terminanfrage absenden <span>→</span></button>
+          <p class="booking-note">Bei eingerichtetem E-Mail-Versand wird nach dem Absenden eine Bestätigung an die angegebene Adresse geschickt. Dies ist eine Projekt-Demonstration und noch nicht mit dem Terminplan einer echten Caritas-Stelle verbunden.</p>
+        </form>
+      </div>
+      <div class="booking-success" id="bookingSuccess" tabindex="-1" hidden>
+        <div class="success-icon" aria-hidden="true">✓</div>
+        <h2 id="bookingSuccessTitle">Terminanfrage verarbeitet</h2>
+        <p id="bookingSummary"></p>
+        <div class="email-status" id="emailStatus" role="status"></div>
+        <div class="confirmation-actions">
+          <button class="btn btn-primary" id="downloadCalendar" type="button">Kalendereintrag laden</button>
+          <a class="btn btn-secondary" id="openDirections" href="https://www.openstreetmap.org/search?query=Schiede%2073%2C%2065549%20Limburg" target="_blank" rel="noopener">Route zum Caritashaus</a>
+          <button class="text-button" id="bookAnother" type="button">Weiteren Termin anfragen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="scannerModal" role="dialog" aria-modal="true" aria-labelledby="scannerTitle" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-panel scanner-panel">
+      <button class="modal-close" data-close-modal aria-label="Fenster schließen">×</button>
+      <div class="modal-kicker">Dokument-Übersetzer</div>
+      <h2 id="scannerTitle">Dokument übersetzen</h2>
+      <p>Fotografiere ein Dokument, lade eine Bild- oder PDF-Datei hoch oder füge Text direkt ein.</p>
+      <div class="translator-languages">
+        <div class="form-group">
+          <label for="sourceLanguage">Sprache im Dokument</label>
+          <select id="sourceLanguage">
+            <option value="de" data-ocr="deu">Deutsch</option>
+            <option value="en" data-ocr="eng">English</option>
+            <option value="ar" data-ocr="ara" selected>العربية</option>
+            <option value="tr" data-ocr="tur">Türkçe</option>
+            <option value="uk" data-ocr="ukr">Українська</option>
+            <option value="fr" data-ocr="fra">Français</option>
+            <option value="es" data-ocr="spa">Español</option>
+            <option value="it" data-ocr="ita">Italiano</option>
+            <option value="pl" data-ocr="pol">Polski</option>
+            <option value="ru" data-ocr="rus">Русский</option>
+            <option value="fa" data-ocr="fas">فارسی</option>
+          </select>
+        </div>
+        <button type="button" class="swap-languages" id="swapLanguages" aria-label="Sprachen tauschen">⇄</button>
+        <div class="form-group">
+          <label for="targetLanguage">Übersetzen in</label>
+          <select id="targetLanguage">
+            <option value="de" selected>Deutsch</option>
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+            <option value="tr">Türkçe</option>
+            <option value="uk">Українська</option>
+            <option value="fr">Français</option>
+            <option value="es">Español</option>
+            <option value="it">Italiano</option>
+            <option value="pl">Polski</option>
+            <option value="ru">Русский</option>
+            <option value="fa">فارسی</option>
+          </select>
+        </div>
+      </div>
+      <div class="live-camera" id="liveCamera">
+        <video id="cameraVideo" playsinline autoplay muted></video>
+        <img id="documentPreview" alt="Vorschau des ausgewählten Dokuments" hidden />
+        <canvas id="captureCanvas" hidden></canvas>
+        <div class="camera-placeholder"><span>⌗</span><strong>Kamera bereit</strong><small>Dokument gerade und gut beleuchtet halten</small></div>
+        <div class="camera-frame"><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div class="scanner-actions"><button class="btn btn-primary" id="startCamera" type="button">Kamera öffnen</button><label class="btn btn-secondary">Bild oder PDF auswählen<input type="file" id="documentInput" accept="image/*,application/pdf,.txt,text/plain" hidden /></label></div>
+      <div class="scanner-test-box">
+        <div><strong>Arabisch → Deutsch testen</strong><small>Mit einer gut lesbaren, einseitigen Beispiel-PDF</small></div>
+        <div class="scanner-test-actions"><button class="text-button" id="loadArabicSample" type="button">Test-PDF jetzt übersetzen</button><a class="text-button" href="arabisches-testdokument.pdf" download>PDF herunterladen ↓</a></div>
+      </div>
+      <div class="form-group translator-text-group">
+        <label for="sourceText">Erkannter Text <span>– bitte vor dem Übersetzen prüfen</span></label>
+        <textarea id="sourceText" rows="6" maxlength="5000" placeholder="Hier kannst du auch Text direkt einfügen …"></textarea>
+        <small id="characterCount">0 / 5.000 Zeichen</small>
+      </div>
+      <button class="btn btn-primary btn-large full" id="translateText" type="button">Text übersetzen <span>→</span></button>
+      <div class="scan-status hidden" id="scanStatus" role="status" aria-live="polite"><span class="loader"></span><strong id="scanStatusTitle">Dokument wird gelesen …</strong><small id="scanStatusDetail">Texterkennung wird vorbereitet</small><progress id="scanProgress" max="100" value="0"></progress></div>
+      <div class="translator-error hidden" id="translatorError" role="alert"></div>
+      <div class="scan-result hidden" id="scanResult">
+        <div class="result-head"><span>✦</span><strong>Übersetzung</strong><small id="resultLanguage">ENGLISH</small></div>
+        <div class="translated-text" id="translatedText" dir="auto"></div>
+        <div class="translation-actions"><button class="btn btn-secondary" id="copyTranslation" type="button">Übersetzung kopieren</button><button class="btn btn-secondary" id="readTranslation" type="button">Vorlesen</button><button class="text-button" id="downloadTranslation" type="button">Als Textdatei laden ↓</button></div>
+        <p class="translation-warning"><strong>Wichtig:</strong> Automatische Übersetzungen können Fehler enthalten. Prüfe Fristen, Namen und Beträge sorgfältig oder frage eine Beratungsstelle.</p>
+      </div>
+      <p class="demo-note privacy-detail">Bilder und PDFs werden für die Texterkennung nur in deinem Browser verarbeitet. Der erkannte Text wird zur Übersetzung vorübergehend an den Übersetzungsdienst MyMemory übertragen und von dieser Website nicht gespeichert.</p>
+    </div>
+  </div>
+
+  <aside class="ai-panel" id="aiPanel" role="dialog" aria-modal="false" aria-hidden="true" aria-labelledby="aiTitle" inert>
+    <div class="ai-header"><div><span>✦</span><div><strong id="aiTitle">Wegweiser-Assistent</strong><small><i></i> Bereit für deine Frage</small></div></div><button id="closeAi" aria-label="Assistent schließen">×</button></div>
+    <div class="ai-messages" id="aiMessages" role="log" aria-live="polite" aria-relevant="additions">
+      <div class="message assistant"><span class="message-avatar">✦</span><div><p>Hallo! Ich beantworte häufige Fragen zu Terminen, Dokumenten, Beratung, Sprachen, Barrierefreiheit, Kontakt und Soforthilfe. Nenne einfach dein Thema.</p></div></div>
+    </div>
+    <form class="ai-input" id="aiForm"><label for="aiInput" class="sr-only">Nachricht</label><input id="aiInput" autocomplete="off" maxlength="2000" required placeholder="Zum Beispiel: Wie buche ich einen Termin?" /><button id="aiSubmit" aria-label="Nachricht senden">↑</button></form>
+    <p class="ai-disclaimer">Der Assistent erkennt häufige Themen anhand von Schlüsselwörtern. Nachrichten werden nicht gespeichert und nicht an einen externen KI-Dienst gesendet. Bei Gefahr oder einem medizinischen Notfall: 112.</p>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    window.googleTranslateElementInit = function () {
+      new google.translate.TranslateElement({ pageLanguage: 'de', includedLanguages: 'de,en,ar,tr,uk', autoDisplay: false }, 'google_translate_element');
+      window.googleTranslateReady = true;
+      window.dispatchEvent(new Event('google-translate-ready'));
+    };
+  </script>
+  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js?v=limburg-location-1"></script>
+</body>
+</html>
