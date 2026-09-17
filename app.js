@@ -1039,7 +1039,15 @@ helpFinderForm.addEventListener('submit', event => {
     $('#openEmergencyResult').addEventListener('click', () => { location.hash = '#/soforthilfe'; });
   } else {
     const urgencyText = urgency === 'soon' ? 'Weil eine Frist oder ein dringendes Problem besteht, wähle möglichst den frühesten Termin.' : 'Eine persönliche Erstberatung kann dein Anliegen ordnen und die nächsten Schritte klären.';
-    result.innerHTML = `<strong>Empfehlung: ${topic}</strong><span>${urgencyText}</span>`;
+    result.innerHTML = `<strong>Empfehlung: ${topic}</strong><span>${urgencyText}</span><button class="btn btn-primary full" type="button" id="bookFinderResult">Termin buchen</button>`;
+    const openRecommendedBooking = () => {
+      if (!$('#bookingSuccess').hidden) resetBookingForm();
+      $('#bookingTopic').value = topic;
+      syncBookingLanguageToSite();
+      openModal(bookingModal);
+    };
+    $('#bookFinderResult').addEventListener('click', openRecommendedBooking);
+    openRecommendedBooking();
   }
   translateDynamicSection(result);
 });
@@ -1060,25 +1068,33 @@ $('#deadlineForm').addEventListener('submit', event => {
   today.setHours(0, 0, 0, 0);
   const target = new Date(`${date}T00:00:00`);
   const remaining = Math.ceil((target - today) / 86400000);
-  currentDeadline = { title, date };
+  currentDeadline = { title, date, uid: crypto.randomUUID() };
   result.hidden = false;
   result.classList.toggle('urgent', remaining <= 3);
   result.innerHTML = remaining < 0
     ? '<strong>Diese Frist ist bereits abgelaufen.</strong><span>Hole möglichst schnell persönliche Beratung ein.</span>'
     : `<strong>${remaining === 0 ? 'Die Frist ist heute.' : `Noch ${remaining} Tag${remaining === 1 ? '' : 'e'}.`}</strong><span>Plane Zeit für Rückfragen und fehlende Unterlagen ein.</span>`;
   $('#downloadDeadline').hidden = false;
+  $('#deadlineImportHelp').hidden = false;
   translateDynamicSection(result);
 });
 
 $('#downloadDeadline').addEventListener('click', () => {
   if (!currentDeadline) return;
   const compactDate = currentDeadline.date.replaceAll('-', '');
+  const endDate = new Date(`${currentDeadline.date}T12:00:00`);
+  endDate.setDate(endDate.getDate() + 1);
+  const compactEndDate = localDateValue(endDate).replaceAll('-', '');
+  const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const escapeIcs = value => value.replaceAll('\\', '\\\\').replaceAll(',', '\\,').replaceAll(';', '\\;').replaceAll('\n', '\\n');
-  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Caritas Wegweiser//DE', 'BEGIN:VEVENT', `UID:${crypto.randomUUID()}@caritas-wegweiser.de`, `DTSTART;VALUE=DATE:${compactDate}`, `SUMMARY:${escapeIcs(currentDeadline.title)}`, 'DESCRIPTION:Frist-Erinnerung aus dem Caritas Wegweiser', 'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', `DESCRIPTION:${escapeIcs(currentDeadline.title)}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Caritas Wegweiser//DE', 'BEGIN:VEVENT', `UID:${currentDeadline.uid}@caritas-wegweiser.de`, `DTSTAMP:${timestamp}`, `DTSTART;VALUE=DATE:${compactDate}`, `DTEND;VALUE=DATE:${compactEndDate}`, `SUMMARY:${escapeIcs(currentDeadline.title)}`, 'DESCRIPTION:Frist-Erinnerung aus dem Caritas Wegweiser', 'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', `DESCRIPTION:${escapeIcs(currentDeadline.title)}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
   link.download = 'frist-erinnerung.ics';
+  document.body.appendChild(link);
   link.click();
+  link.remove();
+  showToast('Kalenderdatei öffnen und den Import in deiner Kalender-App bestätigen.');
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 });
 
