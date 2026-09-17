@@ -2,7 +2,8 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 $$('svg:not([aria-label])').forEach(svg => svg.setAttribute('aria-hidden', 'true'));
 
-const API_BASE_URL = window.location.hostname.endsWith('github.io')
+const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
+const API_BASE_URL = IS_GITHUB_PAGES
   ? 'https://caritas-wegweiser-projekt.johnxax.chatgpt.site'
   : '';
 
@@ -224,22 +225,26 @@ $('#bookingForm').addEventListener('submit', async (event) => {
   let emailSent = false;
   let testMode = false;
   let statusMessage = '';
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/appointments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appointment)
-    });
-    const result = await response.json().catch(() => ({}));
-    emailSent = response.ok && result.emailSent === true;
-    testMode = response.ok && result.testMode === true;
-    statusMessage = result.error || '';
-    appointment.bookingId = result.bookingId || '';
-  } catch {
-    statusMessage = 'Der E-Mail-Dienst ist momentan nicht erreichbar.';
-  } finally {
-    setBookingBusy(false);
+  if (IS_GITHUB_PAGES) {
+    appointment.bookingId = `GH-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+    statusMessage = 'Die öffentliche GitHub-Version kann keine E-Mails automatisch versenden. Die Termindaten bleiben auf diesem Gerät und können als Kalenderdatei gespeichert werden.';
+  } else {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/appointments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appointment)
+      });
+      const result = await response.json().catch(() => ({}));
+      emailSent = response.ok && result.emailSent === true;
+      testMode = response.ok && result.testMode === true;
+      statusMessage = result.error || '';
+      appointment.bookingId = result.bookingId || '';
+    } catch {
+      statusMessage = 'Der E-Mail-Dienst ist momentan nicht erreichbar.';
+    }
   }
+  setBookingBusy(false);
 
   confirmedAppointment = appointment;
   $('#bookingSummary').textContent = appointmentDescription(appointment);
@@ -591,6 +596,27 @@ $('#closeAi').addEventListener('click', () => closeAi());
 const aiConversation = [];
 let aiIsBusy = false;
 
+const localAssistantTopics = [
+  { words: ['notfall', 'gefahr', 'suizid', 'selbstmord', '112'], reply: 'Wenn du oder eine andere Person akut in Gefahr seid, rufe sofort 112 an. Bei einer dringenden sozialen Krise öffne auf dieser Website „Soforthilfe“. Der Assistent ersetzt keinen Notdienst.' },
+  { words: ['termin', 'buchen', 'beratungsgespräch', 'appointment', 'randevu', 'موعد', 'зустріч'], reply: 'Einen Beratungstermin kannst du über „Termin buchen“ anfragen. Wähle Thema, Video, Telefon oder Vor Ort, Datum und Uhrzeit. Gib außerdem deine bevorzugte Gesprächssprache und mögliche Unterstützungsbedarfe an.' },
+  { words: ['übersetz', 'uebersetz', 'dokument', 'brief', 'kamera', 'foto', 'scan', 'translate', 'ترجم', 'переклад'], reply: 'Öffne „Dokumente“ und dann den Dokument-Übersetzer. Du kannst ein Foto aufnehmen oder ein Bild, PDF oder eine Textdatei auswählen. Prüfe Namen, Fristen und Geldbeträge anschließend sorgfältig.' },
+  { words: ['sprache', 'dolmetsch', 'language', 'interpreter', 'لغة', 'мова'], reply: 'Die Website kann oben auf Deutsch, Englisch, Arabisch, Türkisch oder Ukrainisch angezeigt werden. Bei einer Terminanfrage kannst du zusätzlich deine bevorzugte Gesprächssprache angeben.' },
+  { words: ['barriere', 'blind', 'rollstuhl', 'leichte sprache', 'accessib', 'إعاقة', 'доступн'], reply: 'Über das Barrierefreiheits-Symbol oben rechts kannst du die Vorlesefunktion, größere Schrift, hohen Kontrast, weniger Bewegung und eine vereinfachte Ansicht aktivieren.' },
+  { words: ['geld', 'schulden', 'finanz', 'arbeit', 'arbeitslos', 'job', 'ديون', 'борг'], reply: 'Bei Fragen zu Geld, Schulden, Arbeit oder Arbeitslosigkeit wähle „Arbeit & Finanzen“. Dort findest du erste Hinweise und kannst einen Beratungstermin anfragen.' },
+  { words: ['familie', 'kind', 'schwanger', 'erziehung', 'family', 'طفل', 'дитин'], reply: 'Bei Fragen zu Familie, Kindern, Schwangerschaft oder Erziehung wähle „Familie & Erziehung“.' },
+  { words: ['wohnung', 'miete', 'vermieter', 'obdach', 'housing', 'rent', 'سكن', 'житл'], reply: 'Bei Problemen mit Wohnung, Miete oder drohendem Wohnungsverlust wähle „Wohnen & Existenz“. Bei akuter Obdachlosigkeit öffne bitte zusätzlich „Soforthilfe“.' },
+  { words: ['migration', 'asyl', 'aufenthalt', 'refugee', 'لجوء', 'міграц'], reply: 'Bei Fragen zu Migration, Asyl oder Aufenthalt wähle „Migration & Integration“. Bringe vorhandene Schreiben und Dokumente möglichst zum Beratungsgespräch mit.' },
+  { words: ['gesund', 'pflege', 'krank', 'arzt', 'health', 'صحة', 'здоров'], reply: 'Bei Fragen zu Gesundheit, Krankheit oder Pflege wähle „Gesundheit & Pflege“. Der Assistent gibt keine medizinische Diagnose. Im Notfall rufe 112 an.' },
+  { words: ['kontakt', 'email', 'e-mail', 'telefon', 'adresse', 'öffnungszeit', 'contact', 'عنوان', 'адрес'], reply: 'Die Kontaktmöglichkeiten findest du auf der Seite „Kontakt“. Für eine konkrete Beratung ist „Termin buchen“ der schnellste Weg.' },
+  { words: ['hallo', 'guten tag', 'hello', 'merhaba', 'مرحبا', 'привіт'], reply: 'Hallo! Ich helfe dir bei Fragen zu Terminen, Dokumenten, Beratung, Sprachen, Barrierefreiheit, Kontakt und Soforthilfe. Nenne einfach dein Thema.' }
+];
+
+function localAssistantReply(question) {
+  const normalized = question.toLocaleLowerCase('de-DE').normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const topic = localAssistantTopics.find(item => item.words.some(word => normalized.includes(word.normalize('NFD').replace(/\p{Diacritic}/gu, ''))));
+  return topic?.reply || 'Dazu habe ich noch keine feste Antwort. Frage bitte nach Termin, Dokumentübersetzung, Sprache, Barrierefreiheit, Kontakt, Finanzen, Familie, Wohnen, Migration, Gesundheit oder Soforthilfe.';
+}
+
 function addMessage(text, type = 'user') {
   const message = document.createElement('div');
   message.className = `message ${type}`;
@@ -622,16 +648,22 @@ async function handleAiMessage(text) {
   setAiBusy(true);
   const thinking = addMessage('Antwort wird erstellt …', 'assistant thinking');
   try {
-    const response = await fetch(`${API_BASE_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: aiConversation.slice(-10) })
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.reply) throw new Error(result.error || 'Die KI konnte gerade nicht antworten.');
-    aiConversation.push({ role: 'assistant', content: result.reply });
+    let reply;
+    if (IS_GITHUB_PAGES) {
+      reply = localAssistantReply(question);
+    } else {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: aiConversation.slice(-10) })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.reply) throw new Error(result.error || 'Die KI konnte gerade nicht antworten.');
+      reply = result.reply;
+    }
+    aiConversation.push({ role: 'assistant', content: reply });
     thinking.remove();
-    addMessage(result.reply, 'assistant');
+    addMessage(reply, 'assistant');
   } catch (error) {
     thinking.remove();
     addMessage(error.message || 'Die KI ist momentan nicht erreichbar. Bitte versuche es später erneut.', 'assistant');
@@ -727,6 +759,9 @@ function decodeTranslation(value) {
 
 async function translateChunk(chunk, source, target) {
   if (!chunk.trim()) return chunk;
+  if (IS_GITHUB_PAGES) {
+    throw new Error('Die Dokumentübersetzung ist in der öffentlichen GitHub-Version aus Datenschutzgründen deaktiviert. Die Texterkennung und Vorlesefunktion kannst du weiterhin verwenden.');
+  }
   const response = await fetch(`${API_BASE_URL}/api/translate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
