@@ -760,7 +760,27 @@ function decodeTranslation(value) {
 async function translateChunk(chunk, source, target) {
   if (!chunk.trim()) return chunk;
   if (IS_GITHUB_PAGES) {
-    throw new Error('Die Dokumentübersetzung ist in der öffentlichen GitHub-Version aus Datenschutzgründen deaktiviert. Die Texterkennung und Vorlesefunktion kannst du weiterhin verwenden.');
+    if (!$('#translationConsent')?.checked) throw new Error('Bitte stimme zuerst der Textübertragung an MyMemory zu.');
+    const url = new URL('https://api.mymemory.translated.net/get');
+    url.searchParams.set('q', chunk);
+    url.searchParams.set('langpair', source + '|' + target);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(url, { signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
+      const data = await response.json();
+      if (response.status === 429 || Number(data.responseStatus) === 429 || data.quotaFinished) {
+        throw new Error('Das kostenlose Übersetzungslimit ist erreicht. Bitte versuche es später erneut.');
+      }
+      if (!response.ok || Number(data.responseStatus) !== 200 || !data.responseData?.translatedText) {
+        throw new Error('Der Übersetzungsdienst konnte diesen Text nicht übersetzen. Bitte prüfe die Sprachen und versuche es später erneut.');
+      }
+      return decodeTranslation(data.responseData.translatedText);
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('Die Übersetzung dauert zu lange. Bitte versuche es erneut.');
+      if (error instanceof TypeError) throw new Error('Der Übersetzungsdienst ist nicht erreichbar. Bitte prüfe deine Internetverbindung.');
+      throw error;
+    } finally { clearTimeout(timeout); }
   }
   const response = await fetch(`${API_BASE_URL}/api/translate`, {
     method: 'POST',
@@ -779,7 +799,7 @@ async function translateTextInBrowser(text, source, target) {
   for (let index = 0; index < chunks.length; index += 3) {
     translated.push(...await Promise.all(chunks.slice(index, index + 3).map(chunk => translateChunk(chunk, source, target))));
   }
-  return translated.join('');
+  return translated.join(' ');
 }
 
 function showPreview(url) {
@@ -862,6 +882,11 @@ async function translateCurrentText() {
     return;
   }
 
+  if (IS_GITHUB_PAGES && sourceLanguage.value !== targetLanguage.value && !$('#translationConsent')?.checked) {
+    showTranslatorError('Bitte stimme der Übertragung des Textes an MyMemory zu. Danach erneut „Text übersetzen“ drücken.');
+    $('#translationConsent')?.focus();
+    return;
+  }
   setTranslatorBusy(true);
   setScanStatus('Text wird übersetzt …', `${languageNames[sourceLanguage.value]} → ${languageNames[targetLanguage.value]}`, 75);
   try {
@@ -1497,7 +1522,7 @@ async function applySiteLanguage(language) {
   localStorage.setItem('caritasSiteLanguage', language);
   document.documentElement.lang = language;
   document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
-  targetLanguage.value = language === 'de' ? 'en' : language;
+  targetLanguage.value = language;
   setGoogleTranslationCookie(language);
   sessionStorage.setItem('caritasTranslationBootstrapped', language);
   document.body.classList.add('site-translating');
@@ -1511,7 +1536,7 @@ if (savedSiteLanguage && pageTranslationNames[savedSiteLanguage]) {
   $('#languageSelect').value = savedSiteLanguage;
   document.documentElement.lang = savedSiteLanguage;
   document.documentElement.dir = savedSiteLanguage === 'ar' ? 'rtl' : 'ltr';
-  targetLanguage.value = savedSiteLanguage === 'de' ? 'en' : savedSiteLanguage;
+  targetLanguage.value = savedSiteLanguage;
   if (savedSiteLanguage !== 'de') {
     document.body.classList.add('site-translating');
     const desiredCookie = `/de/${savedSiteLanguage}`;
