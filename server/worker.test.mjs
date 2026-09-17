@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import worker from './worker.mjs';
+
+const origin = 'https://jxhn-star.github.io';
+const env = { ALLOWED_ORIGIN: origin, OPENAI_API_KEY: 'test-only', DOCUMENT_LIMITER: { limit: async () => ({ success: true }) } };
+const payload = { mode: 'translate', source: 'ar', target: 'de', text: 'مرحبا', consent: true };
+const request = (body = payload, extra = {}) => new Request('https://test.invalid/api/document', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...extra }, body: JSON.stringify(body) });
+let calls = 0;
+let upstream;
+globalThis.fetch = async (_url, options) => {
+  calls++;
+  upstream = JSON.parse(options.body);
+  return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: 'Guten Tag' }] }] });
+};
+assert.equal((await worker.fetch(request(), { ...env, OPENAI_API_KEY: '' })).status, 503);
+assert.equal((await worker.fetch(request(payload, { Origin: 'https://other.invalid' }), env)).status, 403);
+assert.equal((await worker.fetch(request({ ...payload, consent: false }), env)).status, 400);
+assert.equal((await worker.fetch(request({ ...payload, text: 'x'.repeat(5001) }), env)).status, 400);
+assert.equal(calls, 0);
+const result = await worker.fetch(request(), env);
+assert.equal(result.headers.get('Access-Control-Allow-Origin'), origin);
+assert.equal(result.headers.get('Cache-Control'), 'no-store');
+assert.equal((await result.json()).text, 'Guten Tag');
+assert.equal(upstream.store, false);
+assert.equal(upstream.input[0].content[0].text, 'مرحبا');
+await worker.fetch(request({ ...payload, mode: 'extract', image: 'data:image/jpeg;base64,YQ==' }), env);
+assert.equal(upstream.input[0].content[0].type, 'input_image');
+assert.equal((await worker.fetch(request({ ...payload, mode: 'extract', image: 'https://private.invalid/image' }), env)).status, 400);
+const options = await worker.fetch(new Request('https://test.invalid/api/document', { method: 'OPTIONS', headers: { Origin: origin } }), env);
+assert.equal(options.status, 204);
+assert.equal((await worker.fetch(request(), { ...env, DOCUMENT_LIMITER: { limit: async () => ({ success: false }) } })).status, 429);
+globalThis.fetch = async () => Response.json({ status: 'incomplete', output: [{ content: [{ type: 'output_text', text: 'partial' }] }] });
+assert.equal((await worker.fetch(request(), env)).status, 502);
+globalThis.fetch = async () => new Response('', { status: 401 });
+assert.equal((await worker.fetch(request(), env)).status, 502);
+console.log('PASS: consent, origin, limits, missing credentials, text and image AI requests, CORS, upstream failure and incomplete output.');
