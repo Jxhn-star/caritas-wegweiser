@@ -721,6 +721,10 @@ function setTranslatorBusy(isBusy) {
   cameraButton.disabled = isBusy;
   $('#documentInput').disabled = isBusy;
   $('#swapLanguages').disabled = isBusy;
+  sourceLanguage.disabled = isBusy;
+  targetLanguage.disabled = isBusy;
+  sourceText.disabled = isBusy;
+  $('#loadArabicSample').disabled = isBusy;
 }
 
 function splitTranslationText(text) {
@@ -757,49 +761,35 @@ function decodeTranslation(value) {
   return textarea.value;
 }
 
-async function translateChunk(chunk, source, target) {
-  if (!chunk.trim()) return chunk;
-  if (IS_GITHUB_PAGES) {
-    if (!$('#translationConsent')?.checked) throw new Error('Bitte stimme zuerst der Textübertragung an MyMemory zu.');
-    const url = new URL('https://api.mymemory.translated.net/get');
-    url.searchParams.set('q', chunk);
-    url.searchParams.set('langpair', source + '|' + target);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    try {
-      const response = await fetch(url, { signal: controller.signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
-      const data = await response.json();
-      if (response.status === 429 || Number(data.responseStatus) === 429 || data.quotaFinished) {
-        throw new Error('Das kostenlose Übersetzungslimit ist erreicht. Bitte versuche es später erneut.');
-      }
-      if (!response.ok || Number(data.responseStatus) !== 200 || !data.responseData?.translatedText) {
-        throw new Error('Der Übersetzungsdienst konnte diesen Text nicht übersetzen. Bitte prüfe die Sprachen und versuche es später erneut.');
-      }
-      return decodeTranslation(data.responseData.translatedText);
-    } catch (error) {
-      if (error.name === 'AbortError') throw new Error('Die Übersetzung dauert zu lange. Bitte versuche es erneut.');
-      if (error instanceof TypeError) throw new Error('Der Übersetzungsdienst ist nicht erreichbar. Bitte prüfe deine Internetverbindung.');
-      throw error;
-    } finally { clearTimeout(timeout); }
-  }
-  const response = await fetch(`${API_BASE_URL}/api/translate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: chunk, source, target })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data?.translatedText) throw new Error(data?.error || 'Der Übersetzungsdienst antwortet gerade nicht.');
-  return decodeTranslation(data.translatedText);
+async function requestDocumentAI(payload) {
+  if (!$('#translationConsent')?.checked) throw new Error('Bitte stimme zuerst der Verarbeitung durch OpenAI zu.');
+  const endpoint = document.querySelector('meta[name="document-ai-endpoint"]')?.content;
+  if (!endpoint) throw new Error('Die KI ist noch nicht eingerichtet. Bitte wende dich an den Betreiber.');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 65000);
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, consent: true }), signal: controller.signal
+    });
+    const data = await response.json();
+    if (!response.ok || !data.text) throw new Error(data.error || 'Die KI konnte das Dokument nicht verarbeiten.');
+    return data.text;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('Die KI braucht zu lange. Bitte erneut versuchen.');
+    if (error instanceof TypeError || error instanceof SyntaxError) throw new Error('Die KI-Verbindung ist nicht erreichbar. Bitte später erneut versuchen.');
+    throw error;
+  } finally { clearTimeout(timeout); }
+}
+
+async function translateChunk(text, source, target) {
+  return translateTextInBrowser(text, source, target);
 }
 
 async function translateTextInBrowser(text, source, target) {
   if (source === target) return text;
-  const chunks = splitTranslationText(text);
-  const translated = [];
-  for (let index = 0; index < chunks.length; index += 3) {
-    translated.push(...await Promise.all(chunks.slice(index, index + 3).map(chunk => translateChunk(chunk, source, target))));
-  }
-  return translated.join(' ');
+  return requestDocumentAI({ mode: 'translate', text, source, target });
 }
 
 function showPreview(url) {
@@ -815,17 +805,30 @@ function showPreview(url) {
 }
 
 async function recognizeImage(image, pageLabel = '') {
-  if (!window.Tesseract) throw new Error('Die Texterkennung konnte nicht geladen werden. Bitte prüfe deine Internetverbindung.');
-  const selected = sourceLanguage.options[sourceLanguage.selectedIndex];
-  const ocrLanguage = selected.dataset.ocr || 'deu';
-  const result = await window.Tesseract.recognize(image, ocrLanguage, {
-    logger(message) {
-      if (message.status === 'recognizing text') {
-        setScanStatus('Text wird erkannt …', `${pageLabel}${languageNames[sourceLanguage.value]} · ${Math.round((message.progress || 0) * 100)} %`, (message.progress || 0) * 100);
-      }
-    }
-  });
-  return result?.data?.text || '';
+  if (!$('#translationConsent')?.checked) throw new Error('Bitte stimme zuerst der Verarbeitung durch OpenAI zu.');
+  setScanStatus('KI liest das Dokument …', pageLabel || 'Text und Leserichtung werden erkannt', 35);
+  let input = image;
+  let bitmap;
+  if (image instanceof Blob) {
+    bitmap = await createImageBitmap(image);
+    input = bitmap;
+  }
+  try {
+    const width = input.width;
+    const height = input.height;
+    const scale = Math.min(1, 2200 / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(input, 0, 0, canvas.width, canvas.height);
+    return await requestDocumentAI({
+      mode: 'extract', image: canvas.toDataURL('image/jpeg', 0.88),
+      source: sourceLanguage.value, target: targetLanguage.value
+    });
+  } finally { bitmap?.close(); }
 }
 
 async function renderPdfPage(page, scale = 2.35) {
@@ -874,6 +877,7 @@ async function extractPdfText(file) {
 }
 
 async function translateCurrentText() {
+  if (translateButton.disabled) return;
   const text = sourceText.value.trim();
   clearTranslatorMessages();
   if (!text) {
@@ -882,8 +886,8 @@ async function translateCurrentText() {
     return;
   }
 
-  if (IS_GITHUB_PAGES && sourceLanguage.value !== targetLanguage.value && !$('#translationConsent')?.checked) {
-    showTranslatorError('Bitte stimme der Übertragung des Textes an MyMemory zu. Danach erneut „Text übersetzen“ drücken.');
+  if (sourceLanguage.value !== targetLanguage.value && !$('#translationConsent')?.checked) {
+    showTranslatorError('Bitte stimme der Übertragung des Textes an OpenAI zu. Danach erneut „Text übersetzen“ drücken.');
     $('#translationConsent')?.focus();
     return;
   }
@@ -905,6 +909,11 @@ async function translateCurrentText() {
 
 async function processDocument(file) {
   clearTranslatorMessages();
+  if (!$('#translationConsent')?.checked) {
+    showTranslatorError('Bitte stimme zuerst der KI-Verarbeitung zu und wähle das Dokument danach erneut aus.');
+    $('#translationConsent')?.focus();
+    return;
+  }
   if (file.size > 12 * 1024 * 1024) {
     showTranslatorError('Die Datei ist zu groß. Bitte wähle eine Datei mit höchstens 12 MB.');
     return;
@@ -942,7 +951,7 @@ async function loadArabicSample() {
   sourceText.dir = 'rtl';
   setScanStatus('Test-PDF wird geladen …', 'Arabisch → Deutsch', 2);
   try {
-    const response = await fetch('/arabisches-testdokument.pdf');
+    const response = await fetch('arabisches-testdokument.pdf');
     if (!response.ok) throw new Error('Die Test-PDF konnte nicht geladen werden.');
     const blob = await response.blob();
     await processDocument(new File([blob], 'arabisches-testdokument.pdf', { type: 'application/pdf' }));
