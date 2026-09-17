@@ -1047,7 +1047,6 @@ helpFinderForm.addEventListener('submit', event => {
       openModal(bookingModal);
     };
     $('#bookFinderResult').addEventListener('click', openRecommendedBooking);
-    openRecommendedBooking();
   }
   translateDynamicSection(result);
 });
