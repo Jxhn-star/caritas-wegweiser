@@ -54,7 +54,20 @@ export default {
             : [{ type: 'input_text', text }] }] }),
         signal: AbortSignal.timeout(55000)
       });
-      if (!response.ok) return reply({ error: response.status === 429 ? 'Das KI-Limit ist erreicht. Bitte später erneut versuchen.' : 'Die KI ist momentan nicht verfügbar. Bitte die Server-Einrichtung prüfen.' }, response.status === 429 ? 429 : 502);
+      if (!response.ok) {
+        const failure = await response.json().catch(() => ({}));
+        const code = failure.error?.code;
+        const error = code === 'insufficient_quota'
+          ? 'Das OpenAI-Guthaben oder Abrechnungslimit ist erschöpft. Bitte prüfe die API-Abrechnung.'
+          : response.status === 429
+            ? 'Die OpenAI-Anfragen sind gerade begrenzt. Bitte versuche es in wenigen Minuten erneut.'
+            : response.status === 401
+              ? 'Der OpenAI-Schlüssel wurde abgelehnt. Bitte prüfe das Secret OPENAI_API_KEY.'
+              : response.status === 403
+                ? 'Das OpenAI-Projekt erlaubt diesen Modellzugriff nicht. Bitte prüfe die Projekteinstellungen.'
+                : 'Die KI ist momentan nicht verfügbar. Bitte die Server-Einrichtung prüfen.';
+        return reply({ error }, response.status === 429 ? 429 : 502);
+      }
       const data = await response.json();
       const output = (data.output || []).flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n').trim();
       if (data.status !== 'completed' || !output) return reply({ error: 'Die KI konnte das Dokument nicht vollständig verarbeiten. Bitte eine einzelne, gut lesbare Seite verwenden.' }, 502);
