@@ -6,6 +6,7 @@ const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const API_BASE_URL = IS_GITHUB_PAGES
   ? 'https://caritas-wegweiser-projekt.johnxax.chatgpt.site'
   : '';
+const WORKER_BASE_URL = new URL(document.querySelector('meta[name="document-ai-endpoint"]')?.content || location.origin).origin;
 
 const bookingModal = $('#bookingModal');
 const scannerModal = $('#scannerModal');
@@ -125,8 +126,8 @@ function updateModeInfo() {
   const phone = $('#bookingPhone');
   const phoneGroup = $('#phoneGroup');
   const directions = $('#openDirections');
-  phoneGroup.hidden = mode !== 'Telefon';
-  phone.required = mode === 'Telefon';
+  phoneGroup.hidden = false;
+  phone.required = true;
   directions.hidden = mode !== 'Vor Ort';
 
   if (mode === 'Vor Ort') {
@@ -224,25 +225,22 @@ $('#bookingForm').addEventListener('submit', async (event) => {
   setBookingBusy(true);
   let emailSent = false;
   let testMode = false;
+  let appointmentSaved = false;
   let statusMessage = '';
-  if (IS_GITHUB_PAGES) {
-    appointment.bookingId = `GH-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
-    statusMessage = 'Die öffentliche GitHub-Version kann keine E-Mails automatisch versenden. Die Termindaten bleiben auf diesem Gerät und können als Kalenderdatei gespeichert werden.';
-  } else {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/appointments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(appointment)
-      });
-      const result = await response.json().catch(() => ({}));
-      emailSent = response.ok && result.emailSent === true;
-      testMode = response.ok && result.testMode === true;
-      statusMessage = result.error || '';
-      appointment.bookingId = result.bookingId || '';
-    } catch {
-      statusMessage = 'Der E-Mail-Dienst ist momentan nicht erreichbar.';
-    }
+  try {
+    const response = await fetch(`${WORKER_BASE_URL}/api/appointments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appointment)
+    });
+    const result = await response.json().catch(() => ({}));
+    appointmentSaved = response.ok && result.saved === true;
+    emailSent = response.ok && result.emailSent === true;
+    testMode = response.ok && result.testMode === true;
+    statusMessage = result.error || '';
+    appointment.bookingId = result.bookingId || '';
+  } catch {
+    statusMessage = 'Der Termindienst ist momentan nicht erreichbar.';
   }
   setBookingBusy(false);
 
@@ -255,10 +253,14 @@ $('#bookingForm').addEventListener('submit', async (event) => {
     emailStatus.innerHTML = testMode
       ? '<strong>✓ Testversand erfolgreich</strong><span>Die E-Mail wurde ausschließlich an die hinterlegte Resend-Testadresse geschickt. Die eingegebene Besucheradresse wurde nicht angeschrieben.</span>'
       : `<strong>✓ E-Mail versendet</strong><span>Die Bestätigung wurde an ${appointment.email} geschickt.</span>`;
+  } else if (appointmentSaved) {
+    $('#bookingSuccessTitle').textContent = 'Terminanfrage gespeichert';
+    emailStatus.className = 'email-status sent';
+    emailStatus.innerHTML = '<strong>✓ Anfrage ist beim Team eingegangen</strong><span>Die Mitarbeitenden können deine Angaben jetzt in der Terminübersicht sehen. Eine E-Mail-Bestätigung ist derzeit nicht eingerichtet.</span>';
   } else {
-    $('#bookingSuccessTitle').textContent = 'Terminanfrage nicht versendet';
+    $('#bookingSuccessTitle').textContent = 'Terminanfrage nicht gespeichert';
     emailStatus.className = 'email-status pending';
-    emailStatus.innerHTML = `<strong>Bestätigungs-E-Mail noch nicht versendet</strong><span>${statusMessage || 'Der Versand ist noch nicht eingerichtet.'} Die Termindaten bleiben auf diesem Gerät gespeichert.</span>`;
+    emailStatus.innerHTML = `<strong>Übertragung fehlgeschlagen</strong><span>${statusMessage || 'Der Termindienst ist momentan nicht erreichbar.'} Bitte versuche es später erneut.</span>`;
   }
   translateDynamicSection($('#bookingSuccess'));
   $('#bookingFormView').hidden = true;
@@ -500,7 +502,185 @@ $('#resetLocationSearch').addEventListener('click', () => {
 });
 renderLocationList();
 
-const routePages = ['start', 'standorte', 'dokumente', 'hilfe', 'tipps', 'tipp', 'kontakt', 'soforthilfe'];
+const EMPLOYEE_TOKEN_KEY = 'caritasEmployeeSession';
+let employeeAppointments = [];
+let employeeLoading = false;
+
+function employeeToken() {
+  return sessionStorage.getItem(EMPLOYEE_TOKEN_KEY) || '';
+}
+
+function setEmployeeView(isLoggedIn) {
+  $('#employeeLoginForm').hidden = isLoggedIn;
+  $('#employeeDashboard').hidden = !isLoggedIn;
+  if (!isLoggedIn) $('#employeePassword').value = '';
+}
+
+function employeeDate(value) {
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+}
+
+function appointmentDetail(label, value, { href = '', wide = false } = {}) {
+  const detail = document.createElement('div');
+  detail.className = `appointment-detail${wide ? ' wide' : ''}`;
+  const caption = document.createElement('small');
+  caption.textContent = label;
+  const content = href ? document.createElement('a') : document.createElement('strong');
+  content.textContent = value || '–';
+  if (href && value) content.href = href;
+  detail.append(caption, content);
+  return detail;
+}
+
+function renderEmployeeAppointments() {
+  const query = $('#employeeSearch').value.trim().toLocaleLowerCase('de');
+  const status = $('#employeeStatusFilter').value;
+  const filtered = employeeAppointments.filter(item => {
+    if (status && item.status !== status) return false;
+    if (!query) return true;
+    return [item.name, item.topic, item.email, item.phone, item.preferredLanguage, item.mode, item.location]
+      .some(value => String(value || '').toLocaleLowerCase('de').includes(query));
+  });
+  $('#employeeSummary').textContent = `${filtered.length} von ${employeeAppointments.length} Terminanfragen`;
+  $('#employeeEmpty').hidden = filtered.length > 0;
+  const list = $('#employeeAppointmentList');
+  list.replaceChildren(...filtered.map(item => {
+    const card = document.createElement('article');
+    card.className = 'appointment-card';
+    card.dataset.status = item.status;
+
+    const head = document.createElement('div');
+    head.className = 'appointment-card-head';
+    const title = document.createElement('div');
+    const id = document.createElement('span');
+    id.className = 'appointment-id';
+    id.textContent = item.bookingId;
+    const name = document.createElement('h3');
+    name.textContent = item.name;
+    const when = document.createElement('p');
+    when.textContent = `${employeeDate(item.date)} · ${item.time} Uhr · ${item.mode}`;
+    title.append(id, name, when);
+
+    const statusLabel = document.createElement('label');
+    statusLabel.className = 'appointment-status';
+    statusLabel.append('Status');
+    const select = document.createElement('select');
+    [['neu', 'Neu'], ['bestaetigt', 'Bestätigt'], ['erledigt', 'Erledigt'], ['abgesagt', 'Abgesagt']].forEach(([value, label]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      option.selected = item.status === value;
+      select.append(option);
+    });
+    select.setAttribute('aria-label', `Status für ${item.name}`);
+    select.addEventListener('change', () => updateAppointmentStatus(item.bookingId, select.value, select, card));
+    statusLabel.append(select);
+    head.append(title, statusLabel);
+
+    const details = document.createElement('div');
+    details.className = 'appointment-details';
+    const safePhone = String(item.phone || '').replace(/[^+\d]/g, '');
+    details.append(
+      appointmentDetail('Beratungsthema', item.topic, { wide: true }),
+      appointmentDetail('Gesprächssprache', item.preferredLanguage),
+      appointmentDetail('E-Mail', item.email, { href: item.email ? `mailto:${encodeURIComponent(item.email)}` : '' }),
+      appointmentDetail('Telefonnummer', item.phone, { href: safePhone ? `tel:${safePhone}` : '' }),
+      appointmentDetail('Ort / Zugangsart', item.location || item.mode),
+      appointmentDetail('Unterstützungsbedarf', item.accessibilityNeeds, { wide: true }),
+      appointmentDetail('Eingegangen', new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(item.createdAt)))
+    );
+    card.append(head, details);
+    return card;
+  }));
+}
+
+async function employeeRequest(path, options = {}) {
+  const response = await fetch(`${WORKER_BASE_URL}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${employeeToken()}`, ...(options.headers || {}) }
+  });
+  const result = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    sessionStorage.removeItem(EMPLOYEE_TOKEN_KEY);
+    setEmployeeView(false);
+    throw new Error(result.error || 'Die Anmeldung ist abgelaufen. Bitte erneut anmelden.');
+  }
+  if (!response.ok) throw new Error(result.error || 'Die Termindaten konnten nicht geladen werden.');
+  return result;
+}
+
+async function loadEmployeeAppointments() {
+  if (!employeeToken() || employeeLoading) return;
+  employeeLoading = true;
+  setEmployeeView(true);
+  $('#employeeDashboardError').hidden = true;
+  $('#employeeAppointmentList').innerHTML = '<div class="employee-loading">Termine werden geladen …</div>';
+  try {
+    const result = await employeeRequest('/api/employee/appointments');
+    employeeAppointments = Array.isArray(result.appointments) ? result.appointments : [];
+    renderEmployeeAppointments();
+  } catch (error) {
+    $('#employeeAppointmentList').replaceChildren();
+    $('#employeeDashboardError').textContent = error.message;
+    $('#employeeDashboardError').hidden = false;
+  } finally {
+    employeeLoading = false;
+  }
+}
+
+async function updateAppointmentStatus(bookingId, status, select, card) {
+  select.disabled = true;
+  $('#employeeDashboardError').hidden = true;
+  try {
+    const result = await employeeRequest(`/api/employee/appointments/${encodeURIComponent(bookingId)}`, {
+      method: 'PATCH', body: JSON.stringify({ status })
+    });
+    const item = employeeAppointments.find(entry => entry.bookingId === bookingId);
+    if (item) item.status = result.appointment.status;
+    card.dataset.status = result.appointment.status;
+  } catch (error) {
+    $('#employeeDashboardError').textContent = error.message;
+    $('#employeeDashboardError').hidden = false;
+    await loadEmployeeAppointments();
+  } finally {
+    select.disabled = false;
+  }
+}
+
+$('#employeeLoginForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = $('#employeeLoginButton');
+  const errorBox = $('#employeeLoginError');
+  errorBox.hidden = true;
+  button.disabled = true;
+  button.textContent = 'Anmeldung wird geprüft …';
+  try {
+    const response = await fetch(`${WORKER_BASE_URL}/api/employee/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: $('#employeePassword').value })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.token) throw new Error(result.error || 'Anmeldung fehlgeschlagen.');
+    sessionStorage.setItem(EMPLOYEE_TOKEN_KEY, result.token);
+    $('#employeePassword').value = '';
+    setEmployeeView(true);
+    await loadEmployeeAppointments();
+  } catch (error) {
+    errorBox.textContent = error.message;
+    errorBox.hidden = false;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = 'Anmelden <span>→</span>';
+  }
+});
+$('#employeeLogout').addEventListener('click', () => { sessionStorage.removeItem(EMPLOYEE_TOKEN_KEY); employeeAppointments = []; setEmployeeView(false); $('#employeePassword').focus(); });
+$('#refreshAppointments').addEventListener('click', loadEmployeeAppointments);
+$('#employeeSearch').addEventListener('input', renderEmployeeAppointments);
+$('#employeeStatusFilter').addEventListener('change', renderEmployeeAppointments);
+setEmployeeView(Boolean(employeeToken()));
+
+const routePages = ['start', 'standorte', 'dokumente', 'hilfe', 'tipps', 'tipp', 'kontakt', 'soforthilfe', 'mitarbeiter'];
 const routeTitles = {
   start: 'Caritas Wegweiser',
   standorte: 'Standorte – Caritas Wegweiser',
@@ -509,7 +689,8 @@ const routeTitles = {
   tipps: 'Tipps – Caritas Wegweiser',
   tipp: 'Tipp – Caritas Wegweiser',
   kontakt: 'Kontakt – Caritas Wegweiser',
-  soforthilfe: 'Soforthilfe – Caritas Wegweiser'
+  soforthilfe: 'Soforthilfe – Caritas Wegweiser',
+  mitarbeiter: 'Mitarbeiter-Login – Caritas Wegweiser'
 };
 
 function currentRoute() {
@@ -552,6 +733,7 @@ function renderRoute({ scroll = true } = {}) {
   $$('.route-active .reveal').forEach(element => element.classList.add('visible'));
   if (route === 'tipp') translateDynamicSection($('#tipp'));
   if (route === 'standorte') setTimeout(ensureLocationMap, 0);
+  if (route === 'mitarbeiter' && employeeToken()) loadEmployeeAppointments();
   mobileMenu.classList.remove('open');
   menuButton.setAttribute('aria-expanded', 'false');
   mobileMenu.setAttribute('aria-hidden', 'true');

@@ -27,6 +27,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="styles.css?v=limburg-location-1" />
+  <link rel="stylesheet" href="employee.css?v=employee-1" />
   
 </head>
 <body>
@@ -397,6 +398,36 @@
       <div class="emergency-note reveal"><strong>Wenn Telefonieren nicht sicher ist:</strong><span>Gehe, wenn möglich, zu einer Vertrauensperson oder an einen öffentlichen, sicheren Ort. Nutze in akuter Gefahr die offiziellen Notrufangebote.</span></div>
     </section>
 
+    <section class="section employee-section route-page" id="mitarbeiter" data-page="mitarbeiter">
+      <div class="employee-shell">
+        <div class="employee-heading">
+          <div><span class="kicker">Interner Bereich</span><h2>Mitarbeiter-Login</h2></div>
+          <p>Terminanfragen sicher einsehen und bearbeiten.</p>
+        </div>
+
+        <form class="employee-login-card" id="employeeLoginForm" autocomplete="on">
+          <div class="employee-login-copy"><span aria-hidden="true">🔒</span><div><strong>Geschützter Zugang</strong><small>Nur für berechtigte Mitarbeitende.</small></div></div>
+          <div class="form-group"><label for="employeePassword">Passwort</label><input id="employeePassword" type="password" autocomplete="current-password" required minlength="8" /></div>
+          <div class="form-error" id="employeeLoginError" role="alert" hidden></div>
+          <button class="btn btn-primary btn-large full" id="employeeLoginButton" type="submit">Anmelden <span>→</span></button>
+        </form>
+
+        <div class="employee-dashboard" id="employeeDashboard" hidden>
+          <div class="employee-toolbar">
+            <div><span class="kicker">Terminübersicht</span><h2>Terminanfragen</h2><p id="employeeSummary" aria-live="polite">Termine werden geladen …</p></div>
+            <div class="employee-toolbar-actions"><button class="btn btn-secondary" id="refreshAppointments" type="button">Aktualisieren</button><button class="text-button" id="employeeLogout" type="button">Abmelden</button></div>
+          </div>
+          <div class="employee-filters">
+            <label>Termine durchsuchen<input id="employeeSearch" type="search" placeholder="Name, Thema, E-Mail oder Telefonnummer" /></label>
+            <label>Status<select id="employeeStatusFilter"><option value="">Alle</option><option value="neu">Neu</option><option value="bestaetigt">Bestätigt</option><option value="erledigt">Erledigt</option><option value="abgesagt">Abgesagt</option></select></label>
+          </div>
+          <div class="form-error" id="employeeDashboardError" role="alert" hidden></div>
+          <div class="appointment-list" id="employeeAppointmentList"></div>
+          <div class="employee-empty" id="employeeEmpty" hidden><strong>Keine Termine gefunden</strong><p>Für diese Auswahl liegen keine Terminanfragen vor.</p></div>
+        </div>
+      </div>
+    </section>
+
     <section class="section contact-section route-page" id="kontakt" data-page="kontakt">
       <div class="contact-card reveal">
         <div class="contact-copy"><span class="kicker light">Wir sind für dich da</span><h2>Du weißt nicht, wo du anfangen sollst?</h2><p>Sprich direkt mit unserem Team. Gemeinsam finden wir den nächsten Schritt.</p></div>
@@ -412,7 +443,7 @@
   <footer>
     <div class="footer-brand brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 5v38M5 24h38M11 11l26 26M37 11 11 37" /></svg></span><span><strong>caritas</strong><small>wegweiser</small></span></div>
     <p>Ein digitaler Projektentwurf für Beratung, Orientierung und Teilhabe.</p>
-    <div class="footer-links"><a href="#/kontakt">Kontakt</a><a href="#/soforthilfe">Soforthilfe</a><a href="#/start">Startseite</a><span>Demo · 2026</span></div>
+    <div class="footer-links"><a href="#/kontakt">Kontakt</a><a href="#/soforthilfe">Soforthilfe</a><a href="#/mitarbeiter">Mitarbeiter-Login</a><a href="#/start">Startseite</a><span>Demo · 2026</span></div>
   </footer>
 
   <button class="ai-fab" data-open-ai aria-label="Wegweiser-Assistent öffnen"><span>✦</span><span>Frag den Wegweiser</span></button>
@@ -438,12 +469,12 @@
           <div class="form-group"><label for="bookingConversationLanguage">Gewünschte Gesprächssprache</label><select id="bookingConversationLanguage" name="preferredLanguage" required aria-describedby="bookingLanguageHint"><option value="Deutsch">Deutsch</option><option value="English">English</option><option value="العربية">العربية</option><option value="Türkçe">Türkçe</option><option value="Українська">Українська</option><option value="Andere Sprache">Andere Sprache</option></select><small class="field-hint" id="bookingLanguageHint">In welcher Sprache soll das Beratungsgespräch möglichst stattfinden?</small></div>
           <div class="form-group" id="bookingOtherLanguageGroup" hidden><label for="bookingOtherLanguage">Welche Sprache?</label><input id="bookingOtherLanguage" name="otherLanguage" maxlength="80" autocomplete="language" placeholder="z. B. Français oder Polski" /></div>
           <div class="form-group"><label for="bookingAccessibilityNeeds">Unterstützung für den Termin <span class="optional-label">(optional)</span></label><textarea id="bookingAccessibilityNeeds" name="accessibilityNeeds" maxlength="300" rows="3" placeholder="z. B. Deutsche Gebärdensprache, stufenloser Zugang, Begleitperson oder Leichte Sprache"></textarea><small class="field-hint">Bitte keine medizinischen Diagnosen eintragen – beschreibe nur, was dir beim Gespräch hilft.</small></div>
-          <div class="form-group" id="phoneGroup" hidden><label for="bookingPhone">Telefonnummer</label><input id="bookingPhone" name="phone" type="tel" autocomplete="tel" placeholder="z. B. 0151 12345678" /></div>
+          <div class="form-group" id="phoneGroup"><label for="bookingPhone">Telefonnummer</label><input id="bookingPhone" name="phone" type="tel" autocomplete="tel" required minlength="6" maxlength="40" placeholder="z. B. 0151 12345678" /></div>
           <div class="bot-field" aria-hidden="true"><label for="bookingWebsite">Website</label><input id="bookingWebsite" name="website" autocomplete="off" tabindex="-1" /></div>
           <label class="consent-check"><input id="bookingConsent" type="checkbox" required /><span>Ich stimme zu, dass meine Angaben zur Bearbeitung dieser Terminanfrage verwendet werden. Hinweise zum Datenschutz habe ich gelesen.</span></label>
           <div class="form-error" id="bookingError" role="alert" hidden></div>
           <button class="btn btn-primary btn-large full" id="confirmBooking" type="submit">Terminanfrage absenden <span>→</span></button>
-          <p class="booking-note">Bei eingerichtetem E-Mail-Versand wird nach dem Absenden eine Bestätigung an die angegebene Adresse geschickt. Dies ist eine Projekt-Demonstration und noch nicht mit dem Terminplan einer echten Caritas-Stelle verbunden.</p>
+          <p class="booking-note">Die Anfrage wird geschützt gespeichert und ist anschließend für berechtigte Mitarbeitende sichtbar. Dies ist eine Projekt-Demonstration und noch nicht mit dem Terminplan einer echten Caritas-Stelle verbunden.</p>
         </form>
       </div>
       <div class="booking-success" id="bookingSuccess" tabindex="-1" hidden>
@@ -553,6 +584,6 @@
   </script>
   <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=document-ai-1"></script>
+  <script src="app.js?v=employee-1"></script>
 </body>
 </html>
