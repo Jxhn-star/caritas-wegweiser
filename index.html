@@ -27,7 +27,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="styles.css?v=limburg-location-1" />
-  <link rel="stylesheet" href="employee.css?v=employee-1" />
+  <link rel="stylesheet" href="employee.css?v=employee-2" />
   
 </head>
 <body>
@@ -414,13 +414,21 @@
 
         <div class="employee-dashboard" id="employeeDashboard" hidden>
           <div class="employee-toolbar">
-            <div><span class="kicker">Terminübersicht</span><h2>Terminanfragen</h2><p id="employeeSummary" aria-live="polite">Termine werden geladen …</p></div>
+            <div><span class="kicker">Interner Arbeitsbereich</span><h2>Termin-Dashboard</h2><p id="employeeSummary" aria-live="polite">Termine werden geladen …</p></div>
             <div class="employee-toolbar-actions"><button class="btn btn-secondary" id="refreshAppointments" type="button">Aktualisieren</button><button class="text-button" id="employeeLogout" type="button">Abmelden</button></div>
+          </div>
+          <div class="employee-stats" aria-label="Terminübersicht">
+            <article><span>Alle Anfragen</span><strong id="employeeStatTotal">0</strong><small>Gespeicherte Termine</small></article>
+            <article><span>Neu</span><strong id="employeeStatNew">0</strong><small>Noch nicht bearbeitet</small></article>
+            <article><span>Bestätigt</span><strong id="employeeStatConfirmed">0</strong><small>Fest eingeplant</small></article>
+            <article><span>Demnächst</span><strong id="employeeStatUpcoming">0</strong><small>In den nächsten 7 Tagen</small></article>
           </div>
           <div class="employee-filters">
             <label>Termine durchsuchen<input id="employeeSearch" type="search" placeholder="Name, Thema, E-Mail oder Telefonnummer" /></label>
             <label>Status<select id="employeeStatusFilter"><option value="">Alle</option><option value="neu">Neu</option><option value="bestaetigt">Bestätigt</option><option value="erledigt">Erledigt</option><option value="abgesagt">Abgesagt</option></select></label>
+            <label>Sortierung<select id="employeeSort"><option value="appointment">Termin: früheste zuerst</option><option value="newest">Eingang: neueste zuerst</option><option value="name">Name: A–Z</option></select></label>
           </div>
+          <div class="employee-list-heading"><div><strong>Termine</strong><span id="employeeLastUpdated">Noch nicht aktualisiert</span></div><span class="employee-status-legend"><i></i> Live-Daten</span></div>
           <div class="form-error" id="employeeDashboardError" role="alert" hidden></div>
           <div class="appointment-list" id="employeeAppointmentList"></div>
           <div class="employee-empty" id="employeeEmpty" hidden><strong>Keine Termine gefunden</strong><p>Für diese Auswahl liegen keine Terminanfragen vor.</p></div>
@@ -584,6 +592,6 @@
   </script>
   <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=employee-1"></script>
+  <script src="app.js?v=employee-2"></script>
 </body>
 </html>

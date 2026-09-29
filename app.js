@@ -536,12 +536,27 @@ function appointmentDetail(label, value, { href = '', wide = false } = {}) {
 function renderEmployeeAppointments() {
   const query = $('#employeeSearch').value.trim().toLocaleLowerCase('de');
   const status = $('#employeeStatusFilter').value;
+  const sort = $('#employeeSort').value;
   const filtered = employeeAppointments.filter(item => {
     if (status && item.status !== status) return false;
     if (!query) return true;
     return [item.name, item.topic, item.email, item.phone, item.preferredLanguage, item.mode, item.location]
       .some(value => String(value || '').toLocaleLowerCase('de').includes(query));
+  }).sort((a, b) => {
+    if (sort === 'newest') return b.createdAt.localeCompare(a.createdAt);
+    if (sort === 'name') return a.name.localeCompare(b.name, 'de');
+    return `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`);
   });
+  const now = new Date();
+  const upcomingLimit = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const upcoming = employeeAppointments.filter(item => {
+    const date = new Date(`${item.date}T${item.time}:00`);
+    return date >= now && date <= upcomingLimit && item.status !== 'abgesagt';
+  }).length;
+  $('#employeeStatTotal').textContent = employeeAppointments.length;
+  $('#employeeStatNew').textContent = employeeAppointments.filter(item => item.status === 'neu').length;
+  $('#employeeStatConfirmed').textContent = employeeAppointments.filter(item => item.status === 'bestaetigt').length;
+  $('#employeeStatUpcoming').textContent = upcoming;
   $('#employeeSummary').textContent = `${filtered.length} von ${employeeAppointments.length} Terminanfragen`;
   $('#employeeEmpty').hidden = filtered.length > 0;
   const list = $('#employeeAppointmentList');
@@ -590,7 +605,23 @@ function renderEmployeeAppointments() {
       appointmentDetail('Unterstützungsbedarf', item.accessibilityNeeds, { wide: true }),
       appointmentDetail('Eingegangen', new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(item.createdAt)))
     );
-    card.append(head, details);
+    const actions = document.createElement('div');
+    actions.className = 'appointment-actions';
+    if (item.email) {
+      const email = document.createElement('a');
+      email.className = 'appointment-action';
+      email.href = `mailto:${encodeURIComponent(item.email)}`;
+      email.textContent = '✉ E-Mail schreiben';
+      actions.append(email);
+    }
+    if (safePhone) {
+      const phone = document.createElement('a');
+      phone.className = 'appointment-action';
+      phone.href = `tel:${safePhone}`;
+      phone.textContent = '☎ Anrufen';
+      actions.append(phone);
+    }
+    card.append(head, details, actions);
     return card;
   }));
 }
@@ -619,6 +650,7 @@ async function loadEmployeeAppointments() {
   try {
     const result = await employeeRequest('/api/employee/appointments');
     employeeAppointments = Array.isArray(result.appointments) ? result.appointments : [];
+    $('#employeeLastUpdated').textContent = `Aktualisiert um ${new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(new Date())} Uhr`;
     renderEmployeeAppointments();
   } catch (error) {
     $('#employeeAppointmentList').replaceChildren();
@@ -678,6 +710,7 @@ $('#employeeLogout').addEventListener('click', () => { sessionStorage.removeItem
 $('#refreshAppointments').addEventListener('click', loadEmployeeAppointments);
 $('#employeeSearch').addEventListener('input', renderEmployeeAppointments);
 $('#employeeStatusFilter').addEventListener('change', renderEmployeeAppointments);
+$('#employeeSort').addEventListener('change', renderEmployeeAppointments);
 setEmployeeView(Boolean(employeeToken()));
 
 const routePages = ['start', 'standorte', 'dokumente', 'hilfe', 'tipps', 'tipp', 'kontakt', 'soforthilfe', 'mitarbeiter'];
