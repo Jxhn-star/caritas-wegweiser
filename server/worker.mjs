@@ -96,6 +96,29 @@ export class AppointmentStore {
       return Response.json({ appointment });
     }
     if (request.method === 'GET' && url.pathname === '/appointments') {
+      const testKey = 'appointment:CW-20260929-E62DC87E';
+      const existingTest = await this.storage.get(testKey);
+      if (!existingTest) {
+        await this.storage.put(testKey, {
+          bookingId: 'CW-20260929-E62DC87E',
+          name: 'Max Mustermann (Test)',
+          email: 'testtermin@beispiel.de',
+          phone: '+49 151 00000000',
+          topic: 'Allgemeine Sozialberatung – Testtermin',
+          mode: 'Vor Ort',
+          date: '2026-10-01',
+          time: '10:30',
+          location: 'Caritashaus Limburg, Schiede 73, 65549 Limburg',
+          preferredLanguage: 'Deutsch',
+          accessibilityNeeds: 'Testtermin für die Dashboard-Vorschau',
+          status: 'neu',
+          isTest: true,
+          createdAt: '2026-09-29T06:18:00.000Z',
+          updatedAt: '2026-09-29T06:18:00.000Z'
+        });
+      } else if (!existingTest.isTest) {
+        await this.storage.put(testKey, { ...existingTest, isTest: true });
+      }
       const records = await this.storage.list({ prefix: 'appointment:' });
       return Response.json({ appointments: [...records.values()].sort((a,b) => b.createdAt.localeCompare(a.createdAt)) });
     }

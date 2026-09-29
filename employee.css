@@ -249,6 +249,21 @@
 .appointment-card-head p { margin: 0; color: #5e6871; }
 .appointment-id { color: #7a8289; font-size: .74rem; font-weight: 700; }
 
+.appointment-test-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 3px 7px;
+  color: #9f0c24;
+  background: #fdecef;
+  border: 1px solid #f3bcc6;
+  border-radius: 999px;
+  font-size: .65rem;
+  font-weight: 900;
+  letter-spacing: .08em;
+  vertical-align: middle;
+}
+
 .appointment-status {
   display: grid;
   gap: 5px;

@@ -571,6 +571,12 @@ function renderEmployeeAppointments() {
     const id = document.createElement('span');
     id.className = 'appointment-id';
     id.textContent = item.bookingId;
+    if (item.isTest) {
+      const badge = document.createElement('span');
+      badge.className = 'appointment-test-badge';
+      badge.textContent = 'TEST';
+      id.append(' ', badge);
+    }
     const name = document.createElement('h3');
     name.textContent = item.name;
     const when = document.createElement('p');
