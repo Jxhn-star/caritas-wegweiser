@@ -156,7 +156,8 @@ async function handleDocument(request, env, reply) {
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin');
-    const allowed = origin === env.ALLOWED_ORIGIN;
+    const allowedOrigins = new Set(String(env.ALLOWED_ORIGINS || env.ALLOWED_ORIGIN || '').split(',').map(value => value.trim()).filter(Boolean));
+    const allowed = allowedOrigins.has(origin);
     const headers = { 'Cache-Control':'no-store', Vary:'Origin' };
     if (allowed) Object.assign(headers, {
       'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Methods':'GET, POST, PATCH, OPTIONS',

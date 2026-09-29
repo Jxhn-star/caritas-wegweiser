@@ -1,0 +1,7 @@
+.git
+.github
+.assetsignore
+server
+wrangler.jsonc
+README.md
+*.tar.gz
